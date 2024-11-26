@@ -1,17 +1,15 @@
-# see documentation, e.g.
-# - https://packaging.python.org/en/latest/specifications/declaring-project-metadata/#declaring-project-metadata
-# - https://setuptools.pypa.io/en/latest/userguide/pyproject_config.html
-# - https://www.python.org/dev/peps/pep-0621/
-
+# Build system requirements
 [build-system]
 requires = ["setuptools", "wheel"]
 build-backend = "setuptools.build_meta"
 
+# Find packages in the "src" folder
 [tool.setuptools.packages.find]
 where = ["src"]  # search for packages in the "src" folder
 exclude = []  # exclude packages matching these glob patterns (empty by default)
 namespaces = false  # to disable scanning PEP 420 namespaces (true by default)
 
+# Project metadata
 [project]
 authors = [
     { name = "Alina Weidemann", email = "alina.weidemann@study.hs-duesseldorf.de" },
@@ -34,6 +32,7 @@ classifiers = [
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
 ]
+
 dependencies = [
     "ruff",
     "numpy",
@@ -54,6 +53,7 @@ readme = {file = "README.md", content-type = "text/markdown"}
 requires-python = ">=3.8"
 version = "0.1.0"
 
+# Optional dependencies
 [project.optional-dependencies]
 dev = [
     "black",
@@ -66,20 +66,22 @@ publishing = [
     "wheel",
 ]
 
+# Black configuration
 [tool.black]
 line-length = 120
 include = '\.pyi?$'
 exclude = '''
 /(
     \.eggs
-)/
+)/ 
 '''
 
+# isort configuration
 [tool.isort]
 profile = "black"
 known_first_party = "step_counter"
-src_paths = ["Step-counter", "tests"]
+src_paths = ["src", "tests"]  # Include both src and tests directories
 line_length = "100"
 
-[tool.pylint]  # Optional: Pylint configuration
+[tool.pylint]  # If you opt to use pylint
 # Pylint configuration options
