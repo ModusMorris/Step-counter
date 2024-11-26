@@ -32,14 +32,15 @@ jobs:
           choco install cmake
           pip install -e .  # Install the project in editable mode
           pip install matplotlib --prefer-binary
+
       - name: Install dependencies on other OSes
         if: matrix.os != 'windows-latest'
         run: pip install -e .
 
       - name: Lint with ruff
         run: |
-          ruff check src tests
-          
+          ruff check src tests --fix
+
       - name: Test with pytest
         run: |
           pytest -v
