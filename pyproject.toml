@@ -78,7 +78,7 @@ exclude = '''
 [tool.isort]
 profile = "black"
 known_first_party = "step_counter"
-src_paths = ["src", "tests"]
+src_paths = ["Step-counter", "tests"]
 line_length = "100"
 
 [tool.pylint]  # Optional: Pylint configuration
