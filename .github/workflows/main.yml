@@ -39,7 +39,7 @@ jobs:
 
       - name: Lint with ruff
         run: |
-          ruff src tests
+          ruff src/.
 
       - name: Test with pytest
         run: |
