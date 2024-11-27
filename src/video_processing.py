@@ -122,7 +122,7 @@ def count_steps(joints_data):
     left_steps = step_counts_joint.get("left_ankle", 0)
     num_steps = right_steps + left_steps
 
-    print(f"Step Counts (Dynamic Prominence):")
+    print(f"Step Counts:")
     print(f"  Right Steps: {right_steps}")
     print(f"  Left Steps: {left_steps}")
     print(f"  Total Steps: {num_steps}")
