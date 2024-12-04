@@ -47,6 +47,12 @@ def main():
         video_path = args.video_path
         print(f"Processing video for visualization and data collection: {video_path}")
 
+        # Extract video name for PDF naming
+        video_name = os.path.basename(video_path).split('.')[0]
+        pdf_folder = "PDF"
+        os.makedirs(pdf_folder, exist_ok=True)
+        pdf_path = os.path.join(pdf_folder, f"{video_name}.pdf")
+
         # Process the specified video for visualization and data collection
         result = process_video(video_path, display_video=True)
         if not result:
@@ -56,8 +62,8 @@ def main():
         # Unpack results
         metadata, joints_data, smoothed_data, peaks_data, step_counts_joint = result
 
-        # Visualize the joint motion using the precomputed data
-        visualize_data(joints_data, smoothed_data, peaks_data)
+        # Visualize the joint motion using the precomputed data and save to PDF
+        visualize_data(joints_data, smoothed_data, peaks_data, output_path=pdf_path)
     else:
         print("Unsupported action.")
 

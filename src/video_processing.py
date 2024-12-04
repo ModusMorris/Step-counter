@@ -131,14 +131,16 @@ def count_steps(joints_data):
 
 
 
-def visualize_data(joints_data, smoothed_data, peaks_data):
+def visualize_data(joints_data, smoothed_data, peaks_data, output_path=None):
     """
     Visualizes joint motion and detected steps, using raw data, smoothed data, and peak indices.
+    Optionally saves the plots to a PDF file.
 
     Parameters:
         joints_data (dict): Raw joint movement data.
         smoothed_data (dict): Smoothed joint movement data.
         peaks_data (dict): Detected step (peak) indices for each joint.
+        output_path (str): Path to save the PDF file (optional).
     """
     # Plot joint motion data
     fig, axs = plt.subplots(len(joints_data), 1, figsize=(15, 20))
@@ -162,5 +164,15 @@ def visualize_data(joints_data, smoothed_data, peaks_data):
         axs[i].set_ylabel("Horizontal Position (x)")
 
     plt.tight_layout()
-    plt.show()
+
+    # Save to PDF if output_path is provided
+    if output_path:
+        pdf_path = output_path if output_path.endswith(".pdf") else f"{output_path}.pdf"
+        plt.savefig(pdf_path)
+        print(f"Plots saved to {pdf_path}")
+    else:
+        plt.show()
+
+    plt.close(fig)
+
 
