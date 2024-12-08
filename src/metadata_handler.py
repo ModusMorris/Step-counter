@@ -6,87 +6,81 @@ from video_processing import process_video
 
 def save_metadata(video_path, metadata_csv, annotation_file=None):
     """
-    Speichert Metadaten eines Videos in einer CSV-Datei und prüft optional die Schrittzählung mit Annotationen.
+    Saves metadata of a video into a CSV file and optionally checks step counts against annotations.
 
     Parameters:
-        video_path (str): Pfad zur Videodatei.
-        metadata_csv (str): Pfad zur zentralen Metadatendatei.
-        annotation_file (str): Pfad zur Excel-Datei mit manuellen Schritt-Annotationen (optional).
+        video_path (str): Path to the video file.
+        metadata_csv (str): Path to the central metadata CSV file.
+        annotation_file (str): Path to the Excel file with manual step annotations (optional).
     """
-    # Initialize or load summary from a global variable
+    # Initialize or load the summary
     if not hasattr(save_metadata, "summary"):
         save_metadata.summary = {"matches": 0, "non_matches": [], "no_annotations": []}
 
     summary = save_metadata.summary
 
-    # Extrahiere Metadaten und Schritte
+    # Extract metadata and steps
     result = process_video(video_path, display_video=False)
     if not result:
-        print(f"Fehler beim Extrahieren der Metadaten für '{video_path}'.")
+        print(f"Failed to extract metadata for '{video_path}'.")
         return
 
-    metadata, _, _, _, _ = result  # Ergebnisse von process_video entpacken
+    metadata, _, _, _, _ = result  # Unpack results from process_video
     required_keys = ["resolution", "fps", "duration_seconds", "creation_time", "num_steps"]
     if not all(key in metadata for key in required_keys):
-        print(f"Unvollständige Metadaten für '{video_path}'. Überspringe.")
+        print(f"Incomplete metadata for '{video_path}'. Skipping.")
         return
 
-    # Extrahiere die berechneten Schritte
     calculated_steps = metadata["num_steps"]
 
-    # Prüfe, ob Annotationen existieren, falls ein Annotation-File angegeben ist
+    # Check annotations if provided
     if annotation_file:
         if not os.path.exists(annotation_file):
-            print(f"Annotationsdatei '{annotation_file}' existiert nicht. Bitte erstellen Sie diese.")
+            print(f"Annotation file '{annotation_file}' does not exist.")
             return
 
-        # Lade die Annotationen
         annotations = pd.read_excel(annotation_file)
-
-        # Basisdateiname des Videos extrahieren
         video_filename = os.path.basename(video_path)
 
-        # Prüfe, ob Annotationen für das Video existieren
         if video_filename in annotations["filename"].values:
-            # Hole die manuelle Schrittzählung
             manual_steps = annotations.loc[annotations["filename"] == video_filename, "manual_steps"].iloc[0]
-
-            # Vergleiche berechnete Schritte mit manuellen Schritten
             if calculated_steps == manual_steps:
-                print(f"Schrittzählungen stimmen überein für '{video_filename}' (Manuell: {manual_steps}, Berechnet: {calculated_steps}).")
+                print(f"Steps match for '{video_filename}' (Manual: {manual_steps}, Calculated: {calculated_steps}).")
                 summary["matches"] += 1
             else:
-                print(f"Schrittzählungen stimmen NICHT überein für '{video_filename}' (Manuell: {manual_steps}, Berechnet: {calculated_steps}). Überspringe.")
-                summary["non_matches"].append({
-                    "filename": video_filename,
-                    "manual_steps": manual_steps,
-                    "calculated_steps": calculated_steps
-                })
-                return  # Nicht speichern, wenn Schritte nicht übereinstimmen
+                print(
+                    f"Steps DO NOT match for '{video_filename}' (Manual: {manual_steps}, Calculated: {calculated_steps})."
+                )
+                summary["non_matches"].append(
+                    {"filename": video_filename, "manual_steps": manual_steps, "calculated_steps": calculated_steps}
+                )
+                return
         else:
-            print(f"Keine Annotation gefunden für '{video_filename}'. Verarbeite mit berechneten Schritten.")
+            print(f"No annotation found for '{video_filename}'. Using calculated steps.")
 
-    # CSV-Datei erstellen, falls nicht vorhanden
+    # Create CSV if it doesn't exist
     if not os.path.exists(metadata_csv):
         with open(metadata_csv, "w", newline="") as file:
             writer = csv.writer(file)
             writer.writerow(["filename", "resolution", "fps", "duration_seconds", "creation_time", "num_steps"])
 
-    # Schreibe Metadaten in CSV
+    # Save metadata to CSV
     if not is_video_in_csv(metadata_csv, os.path.basename(video_path)):
         with open(metadata_csv, "a", newline="") as file:
             writer = csv.writer(file)
-            writer.writerow([
-                os.path.basename(video_path),
-                metadata["resolution"],
-                metadata["fps"],
-                metadata["duration_seconds"],
-                metadata["creation_time"],
-                metadata["num_steps"]
-            ])
-        print(f"Metadaten für '{video_path}' gespeichert in '{metadata_csv}'.")
+            writer.writerow(
+                [
+                    os.path.basename(video_path),
+                    metadata["resolution"],
+                    metadata["fps"],
+                    metadata["duration_seconds"],
+                    metadata["creation_time"],
+                    metadata["num_steps"],
+                ]
+            )
+        print(f"Metadata for '{video_path}' saved in '{metadata_csv}'.")
     else:
-        print(f"Metadaten für '{video_path}' sind bereits in '{metadata_csv}'. Überspringe.")
+        print(f"Metadata for '{video_path}' already exists in '{metadata_csv}'. Skipping.")
 
 
 def is_video_in_csv(csv_file, video_filename):
@@ -113,7 +107,7 @@ def is_video_in_csv(csv_file, video_filename):
 
 def print_summary():
     """
-    Prints the summary of matching and non-matching annotations.
+    Prints a summary of matching and non-matching annotations.
 
     This function should be called at the end of the main processing loop.
     """
@@ -126,5 +120,6 @@ def print_summary():
     if summary["non_matches"]:
         print("\nNon-Matching Annotations:")
         for item in summary["non_matches"]:
-            print(f"  - {item['filename']}: Manual Steps = {item['manual_steps']}, Calculated Steps = {item['calculated_steps']}")
-
+            print(
+                f"  - {item['filename']}: Manual Steps = {item['manual_steps']}, Calculated Steps = {item['calculated_steps']}"
+            )

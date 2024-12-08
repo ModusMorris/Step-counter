@@ -7,88 +7,93 @@ from video_processing import process_video, visualize_data, save_step_data_to_cs
 
 def process_and_visualize_video(video_path, output_root, metadata_csv, annotation_file=None):
     """
-    Verarbeitet ein einzelnes Video, speichert Metadaten und Ergebnisse (PDF, CSV) in einem benannten Ordner.
+    Processes a single video, saves metadata, and generates results (PDF, CSVs) in a dedicated folder.
 
     Parameters:
-        video_path (str): Pfad zum Video.
-        output_root (str): Root-Verzeichnis, in dem der Videoordner erstellt wird.
-        metadata_csv (str): Pfad zur zentralen Metadatendatei.
-        annotation_file (str): Pfad zur Excel-Datei mit manuellen Annotationen (optional).
+        video_path (str): Path to the video file.
+        output_root (str): Root directory where the video folder will be created.
+        metadata_csv (str): Path to the central metadata CSV file.
+        annotation_file (str): Path to the Excel file with manual annotations (optional).
     """
     video_name = os.path.splitext(os.path.basename(video_path))[0]
     video_folder = os.path.join(output_root, video_name)
     os.makedirs(video_folder, exist_ok=True)
 
-    print(f"Verarbeite Video: {video_path}")
+    print(f"Processing video: {video_path}")
 
-    # Speichern der Metadaten
+    # Save metadata
     save_metadata(video_path, metadata_csv, annotation_file if annotation_file else None)
 
-    # Verarbeitung und Visualisierung
+    # Process and visualize video
     result = process_video(video_path, display_video=False)
     if not result:
-        print(f"Fehler beim Verarbeiten von {video_path}")
+        print(f"Failed to process {video_path}")
         return
 
-    # Ergebnisse entpacken
+    # Unpack results
     metadata, joints_data, smoothed_data, peaks_data, step_counts_joint = result
 
-    # PDF erstellen und speichern
+    # Create and save the PDF
     pdf_path = os.path.join(video_folder, f"{video_name}.pdf")
     visualize_data(joints_data, smoothed_data, peaks_data, output_path=pdf_path)
 
-    # CSV-Dateien speichern
+    # Save CSV files
     save_step_data_to_csv(video_folder, joints_data, smoothed_data, peaks_data, step_counts_joint)
 
-    print(f"Verarbeitung abgeschlossen. Ergebnisse im Ordner: {video_folder}")
+    print(f"Processing complete. Results saved in folder: {video_folder}")
 
 
 def process_all_videos_in_directory(root_dir, output_root, annotation_file=None):
     """
-    Durchsucht ein Verzeichnis nach Videos und verarbeitet alle, die noch nicht verarbeitet wurden.
-    Speichert Metadaten und Ergebnisse.
+    Scans a directory for videos and processes all unprocessed ones.
+    Saves metadata and results for each video.
 
     Parameters:
-        root_dir (str): Verzeichnis mit Videos.
-        output_root (str): Zielverzeichnis für alle Ergebnisse.
-        annotation_file (str): Pfad zur Excel-Datei mit manuellen Annotationen (optional).
+        root_dir (str): Directory containing videos.
+        output_root (str): Target directory for all results.
+        annotation_file (str): Path to the Excel file with manual annotations (optional).
     """
     metadata_csv = os.path.join(output_root, "metadata.csv")
     for video_path in video_file_generator(root_dir, metadata_csv):
         process_and_visualize_video(video_path, output_root, metadata_csv, annotation_file)
-    print("Alle Videos verarbeitet.")
+    print("All videos processed.")
 
 
 def main():
     """
-    Hauptfunktion für die Videoverarbeitung.
+    Main function for video processing.
     """
     parser = argparse.ArgumentParser(description="Video Processing Script")
-    parser.add_argument("--action", type=str, choices=["save_metadata", "visualize_data"], required=True,
-                        help="Aktion: 'save_metadata' oder 'visualize_data'.")
-    parser.add_argument("--root_dir", type=str,
-                        help="Verzeichnis mit Videos (benötigt für 'save_metadata' und 'visualize_data').")
-    parser.add_argument("--video_path", type=str,
-                        help="Pfad zu einem bestimmten Video (nur für 'visualize_data').")
-    parser.add_argument("--output_root", type=str, default="output",
-                        help="Root-Verzeichnis für die Ausgabedateien.")
-    parser.add_argument("--annotation_file", type=str, required=False,
-                        help="Pfad zur Excel-Datei mit manuellen Annotationen.")
+    parser.add_argument(
+        "--action",
+        type=str,
+        choices=["save_metadata", "visualize_data"],
+        required=True,
+        help="Action to perform: 'save_metadata' or 'visualize_data'.",
+    )
+    parser.add_argument(
+        "--root_dir", type=str, help="Directory containing videos (required for 'save_metadata' and 'visualize_data')."
+    )
+    parser.add_argument("--video_path", type=str, help="Path to a specific video (only for 'visualize_data').")
+    parser.add_argument("--output_root", type=str, default="output", help="Root directory for output files.")
+    parser.add_argument(
+        "--annotation_file", type=str, required=False, help="Path to the Excel file with manual annotations."
+    )
 
     args = parser.parse_args()
 
     if args.action == "visualize_data":
         if args.video_path:
-            process_and_visualize_video(args.video_path, args.output_root, 
-                                        os.path.join(args.output_root, "metadata.csv"), 
-                                        args.annotation_file)
+            process_and_visualize_video(
+                args.video_path, args.output_root, os.path.join(args.output_root, "metadata.csv"), args.annotation_file
+            )
         elif args.root_dir:
             process_all_videos_in_directory(args.root_dir, args.output_root, args.annotation_file)
         else:
-            print("Fehler: Bitte entweder '--video_path' oder '--root_dir' angeben.")
+            print("Error: Please provide either '--video_path' or '--root_dir'.")
     elif args.action == "save_metadata":
         if not args.root_dir:
-            print("Fehler: '--root_dir' ist erforderlich für 'save_metadata'.")
+            print("Error: '--root_dir' is required for 'save_metadata'.")
             return
 
         metadata_csv = os.path.join(args.output_root, "metadata.csv")
@@ -97,7 +102,7 @@ def main():
             save_metadata(video_path, metadata_csv, annotation_file)
         print_summary()
     else:
-        print("Ungültige Aktion. Bitte 'save_metadata' oder 'visualize_data' wählen.")
+        print("Invalid action. Please choose 'save_metadata' or 'visualize_data'.")
 
 
 if __name__ == "__main__":

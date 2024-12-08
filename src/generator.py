@@ -76,8 +76,7 @@ def video_file_generator(root_dir, metadata_csv):
         for dirpath, _, filenames in os.walk(root_dir):
             # Filter video files once, early
             video_files = [
-                os.path.join(dirpath, f) for f in filenames
-                if os.path.splitext(f)[1].lower() in video_extensions
+                os.path.join(dirpath, f) for f in filenames if os.path.splitext(f)[1].lower() in video_extensions
             ]
 
             for video_path in video_files:
