@@ -64,4 +64,4 @@ if clap_frames_optimized:
     for clap in clap_frames_optimized:
         print(f"Clap detected at Frame {clap[0]}, Time {clap[1]:.2f} seconds")
 else:
-    print("Keine Klatscher erkannt!")
+    print("No Clap detected!")
