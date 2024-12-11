@@ -17,7 +17,7 @@ def clap_detection_frames(video_path, frame_skip=5):
     claps_detected = []
     
     if not cap.isOpened():
-        print("Video konnte nicht geöffnet werden!")
+        print("Video could not be opened!")
     
     while cap.isOpened():
         ret, frame = cap.read()
