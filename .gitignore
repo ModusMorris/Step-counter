@@ -163,3 +163,5 @@ cython_debug/
 images/
 media/
 videos/
+
+.DS_Store
