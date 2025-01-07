@@ -163,3 +163,7 @@ cython_debug/
 images/
 media/
 videos/
+
+# Ignore Files
+*.pdf 
+*.csv
