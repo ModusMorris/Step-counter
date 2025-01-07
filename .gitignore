@@ -166,3 +166,4 @@ videos/
 
 # Ignore Files
 *.pdf 
+*.csv

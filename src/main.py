@@ -64,12 +64,12 @@ def main():
     Hauptfunktion für die Videoverarbeitung.
     """
     parser = argparse.ArgumentParser(description="Video Processing Script")
-    parser.add_argument("--action", type=str, choices=["save_metadata", "visualize_data"], required=True,
-                        help="Aktion: 'save_metadata' oder 'visualize_data'.")
+    parser.add_argument("--action", type=str, choices=["save_metadata", "process_data"], required=True,
+                        help="Aktion: 'save_metadata' oder 'process_data'.")
     parser.add_argument("--root_dir", type=str,
-                        help="Verzeichnis mit Videos (benötigt für 'save_metadata' und 'visualize_data').")
+                        help="Verzeichnis mit Videos (benötigt für 'save_metadata' und 'process_data').")
     parser.add_argument("--video_path", type=str,
-                        help="Pfad zu einem bestimmten Video (nur für 'visualize_data').")
+                        help="Pfad zu einem bestimmten Video (nur für 'process_data').")
     parser.add_argument("--output_root", type=str, default="output",
                         help="Root-Verzeichnis für die Ausgabedateien.")
     parser.add_argument("--annotation_file", type=str, required=False,
@@ -77,7 +77,7 @@ def main():
 
     args = parser.parse_args()
 
-    if args.action == "visualize_data":
+    if args.action == "process_data":
         if args.video_path:
             process_and_visualize_video(args.video_path, args.output_root, 
                                         os.path.join(args.output_root, "metadata.csv"), 
@@ -97,7 +97,7 @@ def main():
             save_metadata(video_path, metadata_csv, annotation_file)
         print_summary()
     else:
-        print("Ungültige Aktion. Bitte 'save_metadata' oder 'visualize_data' wählen.")
+        print("Ungültige Aktion. Bitte 'save_metadata' oder 'process_data' wählen.")
 
 
 if __name__ == "__main__":
