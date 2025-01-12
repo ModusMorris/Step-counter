@@ -60,7 +60,7 @@ def detect_claps_first_last_segments(audio_array, fps, num_segments):
 
 # Method to process videos in a directory
 
-def process_videos_in_directory(directory_path, audio_output_dir, num_segments):
+def process_videos_in_directory(directory_path, audio_output_dir, num_segments, plot_data="no"):
     video_extension = ".mp4"
     clap_results = []
 
@@ -169,3 +169,32 @@ def plot_accelerometer_data_interval(cleaned_data, time_seconds, start_time=None
     plt.ylabel('Acceleration Norm')
     plt.legend()
     plt.show()
+
+
+# Function to find peaks in the normalized data
+def find_peaks_in_interval(normalized_data, time_seconds, start_time=None, end_time=None):
+    # Filter data by interval
+    if start_time is not None or end_time is not None:
+        mask = (time_seconds >= (start_time or time_seconds.min())) & (time_seconds <= (end_time or time_seconds.max()))
+        filtered_data = normalized_data[mask]
+        filtered_time = time_seconds[mask]
+    else:
+        filtered_data = normalized_data
+        filtered_time = time_seconds
+
+    # Ensure filtered_time is a Series for indexing
+    filtered_time = pd.Series(filtered_time.values, index=filtered_data.index)
+
+    # Split the interval into two halves
+    mid_point = len(filtered_data) // 2
+    first_half_data = filtered_data.iloc[:mid_point]
+    second_half_data = filtered_data.iloc[mid_point:]
+
+    first_half_time = filtered_time.iloc[:mid_point]
+    second_half_time = filtered_time.iloc[mid_point:]
+
+    # Find the maxima in each half
+    first_half_max_time = first_half_time[first_half_data.idxmax()]
+    second_half_max_time = second_half_time[second_half_data.idxmax()]
+
+    return first_half_max_time, second_half_max_time
