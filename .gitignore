@@ -164,4 +164,6 @@ images/
 media/
 videos/
 
-.DS_Store
+# Ignore Files
+*.pdf 
+*.csv

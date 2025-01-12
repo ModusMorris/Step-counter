@@ -1,5 +1,6 @@
 import os
 import cv2
+import csv
 import numpy as np
 import mediapipe as mp
 from tqdm import tqdm
@@ -161,14 +162,16 @@ def count_steps(joints_data):
 
 
 
-def visualize_data(joints_data, smoothed_data, peaks_data):
+def visualize_data(joints_data, smoothed_data, peaks_data, output_path=None):
     """
     Visualizes joint motion and detected steps, using raw data, smoothed data, and peak indices.
+    Optionally saves the plots to a PDF file.
 
     Parameters:
         joints_data (dict): Raw joint movement data.
         smoothed_data (dict): Smoothed joint movement data.
         peaks_data (dict): Detected step (peak) indices for each joint.
+        output_path (str): Path to save the PDF file (optional).
     """
     # Plot joint motion data
     fig, axs = plt.subplots(len(joints_data), 1, figsize=(15, 20))
@@ -192,5 +195,75 @@ def visualize_data(joints_data, smoothed_data, peaks_data):
         axs[i].set_ylabel("Horizontal Position (x)")
 
     plt.tight_layout()
-    plt.show()
 
+    # Save to PDF if output_path is provided
+    if output_path:
+        pdf_path = output_path if output_path.endswith(".pdf") else f"{output_path}.pdf"
+        plt.savefig(pdf_path)
+        print(f"Plots saved to {pdf_path}")
+    else:
+        plt.show()
+
+    plt.close(fig)
+
+def save_step_data_to_csv(output_folder, joints_data, smoothed_data, peaks_data, step_counts_joint):
+    """
+    Speichert Rohdaten, geglättete Daten und Schrittzählungen in separaten CSV-Dateien.
+    Berechnet die Gesamtanzahl der Schritte nur basierend auf 'left_foot_index' und 'right_foot_index'.
+
+    Parameters:
+        output_folder (str): Zielordner für die CSV-Dateien.
+        joints_data (dict): Rohdaten der Gelenkbewegungen.
+        smoothed_data (dict): Geglättete Daten der Gelenkbewegungen.
+        peaks_data (dict): Detektierte Peaks (Schritte) pro Gelenk.
+        step_counts_joint (dict): Zählung der Schritte für jedes Gelenk.
+    """
+    os.makedirs(output_folder, exist_ok=True)
+
+    # 1. Rohdaten speichern
+    raw_data_csv = os.path.join(output_folder, "raw_data.csv")
+    with open(raw_data_csv, mode="w", newline="") as file:
+        writer = csv.writer(file)
+        writer.writerow(["Frame"] + list(joints_data.keys()))  # Header
+        max_frames = max(len(data) for data in joints_data.values())
+        for frame in range(max_frames):
+            row = [frame] + [joints_data[joint][frame] if frame < len(joints_data[joint]) else None
+                             for joint in joints_data]
+            writer.writerow(row)
+    print(f"Rohdaten gespeichert: {raw_data_csv}")
+
+    # 2. Geglättete Daten speichern
+    smoothed_data_csv = os.path.join(output_folder, "smoothed_data.csv")
+    with open(smoothed_data_csv, mode="w", newline="") as file:
+        writer = csv.writer(file)
+        writer.writerow(["Frame"] + list(smoothed_data.keys()))  # Header
+        max_frames = max(len(data) for data in smoothed_data.values())
+        for frame in range(max_frames):
+            row = [frame] + [smoothed_data[joint][frame] if frame < len(smoothed_data[joint]) else None
+                             for joint in smoothed_data]
+            writer.writerow(row)
+    print(f"Geglättete Daten gespeichert: {smoothed_data_csv}")
+
+    # 3. Schrittzählung speichern
+    steps_csv = os.path.join(output_folder, "step_counts.csv")
+    with open(steps_csv, mode="w", newline="") as file:
+        writer = csv.writer(file)
+        writer.writerow(["Joint", "Detected Steps", "Peaks"])  # Header
+
+        # Schreibe die Schrittzählungen für alle Gelenke außer den Total Steps
+        for joint, steps in step_counts_joint.items():
+            if joint not in ["left_foot_index", "right_foot_index"]:  # Ignoriere diese Gelenke vorerst
+                peaks = peaks_data[joint]
+                writer.writerow([joint, steps, list(peaks)])  # Fügt die Peaks mit hinzu
+
+        # Berechnung der Total Steps basierend auf 'left_foot_index' und 'right_foot_index'
+        left_steps = len(peaks_data.get("left_foot_index", []))
+        right_steps = len(peaks_data.get("right_foot_index", []))
+        total_steps = left_steps + right_steps
+
+        # Schreibe die Einträge für 'left_foot_index', 'right_foot_index' und die Total Steps
+        writer.writerow(["left_foot_index", left_steps, list(peaks_data.get("left_foot_index", []))])
+        writer.writerow(["right_foot_index", right_steps, list(peaks_data.get("right_foot_index", []))])
+        writer.writerow(["Total", total_steps, ""])
+
+    print(f"Schrittzählungen gespeichert: {steps_csv}")
