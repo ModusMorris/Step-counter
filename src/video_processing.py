@@ -6,13 +6,14 @@ from tqdm import tqdm
 from datetime import datetime
 from scipy.signal import find_peaks
 from matplotlib import pyplot as plt
+from clap_detection_methods import detect_claps_first_last_segments
 
 # Initialize MediaPipe Pose
 mp_pose = mp.solutions.pose
 mp_drawing = mp.solutions.drawing_utils
 
 
-def process_video(video_path, display_video=False):
+def process_video(video_path, num_segments=4, display_video=False):
     """
     Processes a video file to extract joint motion data and metadata, optionally displaying the video.
 
@@ -42,12 +43,39 @@ def process_video(video_path, display_video=False):
     duration = round(frame_count / fps, 2)
     creation_time = datetime.fromtimestamp(os.path.getctime(video_path)).strftime("%Y-%m-%d %H:%M:%S")
 
+    # NEEEW
+
+    clip = VideoFileClip(video_path)
+    audio = clip.audio
+
+    if audio is None:
+        print("  No audio track found.")
+        return None
+    
+    audio_array = audio.to_soundarray()
+    claps = detect_claps_first_last_segments(audio_array, fps=fps, num_segments=num_segments)
+
+    if not claps or len(claps) < 2:
+        print("  Not enough claps detected for synchronization.")
+        return None
+    
+    start_clap_time = claps[0][0]
+    end_clap_time = claps[1][0]
+    start_clap_frame = claps[0][1]
+    end_clap_frame = claps[1][1]
+
+    current_frame = 0
+
     # Progress bar for processing frames
-    with tqdm(total=frame_count, desc=f"Processing {os.path.basename(video_path)}", unit="frame") as progress:
+    with tqdm(total=(end_clap_frame-start_clap_frame), desc=f"Processing {os.path.basename(video_path)}", unit="frame") as progress:
         while cap.isOpened():
             ret, frame = cap.read()
-            if not ret:
+            if not ret or current_frame > end_frame:
                 break
+
+            if current_frame < start_frame:
+                current_frame += 1
+                continue
 
             rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             results = pose.process(rgb_frame)
@@ -68,7 +96,7 @@ def process_video(video_path, display_video=False):
                     # Exit on 'q' key press
                     if cv2.waitKey(5) & 0xFF == ord("q"):
                         break
-
+            current_frame += 1
             progress.update(1)  # Update the progress bar after each frame is processed
 
     cap.release()
@@ -81,7 +109,9 @@ def process_video(video_path, display_video=False):
         "fps": fps,
         "duration_seconds": duration,
         "creation_time": creation_time,
-        "num_steps": num_steps,
+        "start_clap_frame": start_clap_frame,
+        "end_clap_frame": end_clap_frame,
+        "num_steps": num_steps
     }
 
     return metadata, joints_data, smoothed_data, peaks_data, step_counts_joint
