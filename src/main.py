@@ -22,16 +22,18 @@ def process_and_visualize_video(video_path, output_root, metadata_csv, annotatio
     print(f"Verarbeite Video: {video_path}")
 
     # Speichern der Metadaten
-    save_metadata(video_path, metadata_csv, annotation_file if annotation_file else None)
+    #save_metadata(video_path, metadata_csv, annotation_file if annotation_file else None)
 
     # Verarbeitung und Visualisierung
-    result = process_video(video_path, display_video=False)
+    result = process_video(video_path, num_segments=4, display_video=False)
     if not result:
         print(f"Fehler beim Verarbeiten von {video_path}")
         return
 
-    # Ergebnisse entpacken
+    # Ergebnisse entpacken und saven
     metadata, joints_data, smoothed_data, peaks_data, step_counts_joint = result
+
+    save_metadata(metadata, video_path, metadata_csv, annotation_file if annotation_file else None)
 
     # PDF erstellen und speichern
     pdf_path = os.path.join(video_folder, f"{video_name}.pdf")

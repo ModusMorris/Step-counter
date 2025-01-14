@@ -7,13 +7,16 @@ from tqdm import tqdm
 from datetime import datetime
 from scipy.signal import find_peaks
 from matplotlib import pyplot as plt
+from moviepy import VideoFileClip
+from clap_detection_methods import detect_claps_first_last_segments
+
 
 # Initialize MediaPipe Pose
 mp_pose = mp.solutions.pose
 mp_drawing = mp.solutions.drawing_utils
 
 
-def process_video(video_path, display_video=False):
+def process_video(video_path, num_segments, display_video=False):
     """
     Processes a video file to extract joint motion data and metadata, optionally displaying the video.
 
@@ -75,6 +78,36 @@ def process_video(video_path, display_video=False):
     cap.release()
     if display_video:
         cv2.destroyAllWindows()
+
+    ###NEW CODE###
+    # Load the video audio file
+    clip = VideoFileClip(video_path)
+    if not clip.audio:
+            print("No audio track found; using full video range")
+    else:
+        audio_array = clip.audio.to_soundarray()
+        audio_fps = clip.audio.fps
+
+        # Detect the two claps (start & end)
+        claps = detect_claps_first_last_segments(audio_array, fps=audio_fps, num_segments=num_segments)
+
+        first_clap_time_sec = claps[0][0]
+        second_clap_time_sec = claps[1][0]
+
+        # Convert these times to the videos frames
+        first_clap_frame = int(first_clap_time_sec * fps)
+        second_clap_frame = int(second_clap_time_sec * fps)
+
+
+        # Slice data in place
+        for joint in joints_data:
+            joints_data[joint] = joints_data[joint][first_clap_frame: second_clap_frame + 1]
+
+        # update duration?
+        new_frame_count = len(joints_data["right_ankle"])  # or any joint
+        duration = round(new_frame_count / fps, 2)
+
+        print(f"Sliced data to frames {first_clap_frame}–{second_clap_frame} (≈ {duration} sec).")
 
     step_counts_joint, smoothed_data, peaks_data, num_steps = count_steps(joints_data)
     metadata = {

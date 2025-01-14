@@ -4,7 +4,7 @@ import pandas as pd
 from video_processing import process_video
 
 
-def save_metadata(video_path, metadata_csv, annotation_file=None):
+def save_metadata(metadata, video_path, metadata_csv, annotation_file=None):
     """
     Speichert Metadaten eines Videos in einer CSV-Datei und prüft optional die Schrittzählung mit Annotationen.
 
@@ -19,13 +19,7 @@ def save_metadata(video_path, metadata_csv, annotation_file=None):
 
     summary = save_metadata.summary
 
-    # Extrahiere Metadaten und Schritte
-    result = process_video(video_path, display_video=False)
-    if not result:
-        print(f"Fehler beim Extrahieren der Metadaten für '{video_path}'.")
-        return
-
-    metadata, _, _, _, _ = result  # Ergebnisse von process_video entpacken
+    # Prüfe, ob alle erforderlichen Metadaten vorhanden sind
     required_keys = ["resolution", "fps", "duration_seconds", "creation_time", "num_steps"]
     if not all(key in metadata for key in required_keys):
         print(f"Unvollständige Metadaten für '{video_path}'. Überspringe.")
