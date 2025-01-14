@@ -60,7 +60,7 @@ def detect_claps_first_last_segments(audio_array, fps, num_segments):
 
 # Method to process videos in a directory
 
-def process_videos_in_directory(directory_path, audio_output_dir, num_segments, plot_data="no"):
+def process_videos_in_directory(directory_path, audio_output_dir, num_segments):
     video_extension = ".mp4"
     clap_results = []
 
@@ -77,10 +77,11 @@ def process_videos_in_directory(directory_path, audio_output_dir, num_segments, 
                 clip = VideoFileClip(file_path)
                 audio = clip.audio
                 if audio is None:
-                    print("  No audio track found.")
+                    print("No audio track found.")
                     continue
 
                 fps = audio.fps
+                print(fps)
                 audio_array = audio.to_soundarray()
 
                 # Save the audio to a file
