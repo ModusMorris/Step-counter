@@ -6,11 +6,9 @@ from moviepy import VideoFileClip
 
 
 
-
-
 # Method to plot the audio waveform of a video file
 
-def plot_audio_waveform_from_array(audio_array, fps):
+def plot_audio_waveform_from_array(audio_array, fps, num_segments=4):
     # If stereo, convert to mono by averaging channels
     if audio_array.ndim > 1:
         audio_data = np.mean(audio_array, axis=1)
@@ -23,11 +21,32 @@ def plot_audio_waveform_from_array(audio_array, fps):
     time_axis = np.linspace(0, duration, num=len(audio_data))
 
     plt.figure(figsize=(12, 4))
-    plt.plot(time_axis, audio_data, color='steelblue')
-    plt.title("Audio Waveform")
+    plt.plot(time_axis, audio_data, color='steelblue', label="Waveform")
+
+    # Calculate segment length
+    segment_length = len(audio_data) // num_segments
+
+    first_segment_start_time = 0.0
+    first_segment_end_time = segment_length / fps
+    last_segment_start_time = (num_segments - 1) * segment_length / fps
+    last_segment_end_time = duration  
+
+    # Color the first and last segments
+    plt.axvspan(first_segment_start_time, 
+                first_segment_end_time, 
+                color='red', alpha=0.15, 
+                label='Erstes Segment')
+
+    plt.axvspan(last_segment_start_time, 
+                last_segment_end_time, 
+                color='green', alpha=0.15, 
+                label='Letztes Segment')
+
+    plt.title("Audio Waveform with First & Last Segment Shaded")
     plt.xlabel("Time (seconds)")
     plt.ylabel("Amplitude")
     plt.grid(True)
+    plt.legend()
     plt.tight_layout()
     plt.show()
 
@@ -81,7 +100,6 @@ def process_videos_in_directory(directory_path, audio_output_dir, num_segments):
                     continue
 
                 fps = audio.fps
-                print(fps)
                 audio_array = audio.to_soundarray()
 
                 # Save the audio to a file
