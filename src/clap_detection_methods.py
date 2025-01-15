@@ -124,7 +124,6 @@ def process_videos_in_directory(directory_path, audio_output_dir, num_segments):
                                      "End Clap Seconds": claps[1][0],
                                      "Start Clap Frame": claps[0][1],
                                      "End Clap Frame": claps[1][1],
-                                     "Audio Path": audio_output_path,
                                      "Duration Between Claps": duration_between_claps})
 
 
