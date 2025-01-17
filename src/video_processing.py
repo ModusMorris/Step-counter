@@ -144,7 +144,7 @@ def count_steps(joints_data):
 
         # Calculate dynamic prominence based on standard deviation
         std_dev = np.std(smoothed)
-        prominence = 0.85 * std_dev  # Adjust factor as needed
+        prominence = 0.68 * std_dev  # Adjust factor as needed
 
         # Detect peaks with dynamic prominence
         peaks, _ = find_peaks(smoothed, distance=30, prominence=prominence)
