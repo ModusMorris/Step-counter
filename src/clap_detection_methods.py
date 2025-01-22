@@ -5,7 +5,6 @@ import matplotlib.pyplot as plt
 from moviepy import VideoFileClip
 
 
-
 # Method to plot the audio waveform of a video file
 
 def plot_audio_waveform_from_array(audio_array, fps, num_segments=4):
@@ -79,19 +78,16 @@ def detect_claps_first_last_segments(audio_array, fps, num_segments):
 
 # Method to process videos in a directory
 
-def process_videos_in_directory(directory_path, audio_output_dir, num_segments):
+def process_videos_in_directory(directory_path, num_segments):
     video_extension = ".mp4"
     clap_results = []
-
-    # Create the audio output directory if it doesn't exist
-    if not os.path.exists(audio_output_dir):
-        os.makedirs(audio_output_dir)
 
     for filename in os.listdir(directory_path):
         file_path = os.path.join(directory_path, filename)
         if os.path.isfile(file_path) and os.path.splitext(filename.lower())[1] == video_extension:
 
             print(f"\nProcessing video: {filename}")
+
             try:
                 clip = VideoFileClip(file_path)
                 audio = clip.audio
@@ -101,11 +97,6 @@ def process_videos_in_directory(directory_path, audio_output_dir, num_segments):
 
                 fps = audio.fps
                 audio_array = audio.to_soundarray()
-
-                # Save the audio to a file
-                #audio_output_path = os.path.join(audio_output_dir, f"{os.path.splitext(filename)[0]}.wav")
-                #audio.write_audiofile(audio_output_path)
-                #print(f"  Audio saved to {audio_output_path}")
 
 
                 plot_audio_waveform_from_array(audio_array, fps)
@@ -126,29 +117,28 @@ def process_videos_in_directory(directory_path, audio_output_dir, num_segments):
                                      "End Clap Frame": claps[1][1],
                                      "Duration Between Claps": duration_between_claps})
 
-
             except Exception as e:
                 print(f"  Error processing {filename}: {e}")
 
     return clap_results
 
 
-
-
-# Function to load accelerometer data
-def load_accelerometer_data(acc_data_path, sampling_frequency=256):
-
-    raw_data = pd.read_csv(
-        acc_data_path,
-        skiprows=10,
+def load_accelerometer_data(file_path, sampling_frequency=256):
+    data = pd.read_csv(
+        file_path,
+        delimiter=",",
+        skiprows=11,  
         names=["X", "Y", "Z"],
-        delimiter=',',
-        decimal=","
+        dtype=str
     )
-    raw_data = raw_data.iloc[1:].reset_index(drop=True)
-    cleaned_data = raw_data.apply(pd.to_numeric, errors='coerce').dropna()
-    time_seconds = (cleaned_data.index - cleaned_data.index[0]) / sampling_frequency
-    return cleaned_data, time_seconds
+
+    # Convert to floats
+    data = data.map(lambda x: x.replace(',', '.')).astype(float)
+    data.reset_index(drop=True, inplace=True)
+    time_seconds = data.index / sampling_frequency
+
+    return data, time_seconds
+
 
 # Function to normalize data
 def normalize_data(data):

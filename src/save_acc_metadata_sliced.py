@@ -7,6 +7,7 @@ from clap_detection_methods import load_accelerometer_data
 def slice_accelerometer_data(metadata_csv, raw_accel_data_dir, output_root):
 
     df = pd.read_csv(metadata_csv)
+    scaling_data = []
 
     for _, row in df.iterrows():
         video_id = row["video_id"]
@@ -35,10 +36,35 @@ def slice_accelerometer_data(metadata_csv, raw_accel_data_dir, output_root):
         output_filename = f"{video_id}_acceleration_data.csv"
         output_path = os.path.join(video_folder, output_filename)
 
+        scaling_data.append((len(sliced_data), video_folder))
+
         # Save sliced data
         sliced_data.to_csv(output_path, index=False)
         print(f"Sliced data saved to: {output_path}")
 
+    return scaling_data
+
+def scale_stepcounts_data(scaling_data):
+    for len_acc_data, video_folder in scaling_data:
+        data_path = os.path.join(video_folder, "step_counts.csv")
+        data = pd.read_csv(data_path)
+        len_frames_video = len(pd.read_csv(os.path.join(video_folder, "raw_data.csv")))
+        scaling_factor = len_acc_data / len_frames_video
+
+        for index, row in data.iterrows():
+            val = row["Peaks"]
+            if pd.isna(val):
+                continue
+            val_str = str(val)
+            if "[" not in val_str:
+                continue
+            peaks_str = val_str.strip("[]")
+            peaks = [int(p.strip()) for p in peaks_str.split(",")]
+            scaled_peaks = [int(p * scaling_factor) for p in peaks]
+            data.at[index, "Peaks"] = str(scaled_peaks)
+
+        scaled_step_counts_path = os.path.join(video_folder, "scaled_step_counts.csv")
+        data.to_csv(scaled_step_counts_path, index=False)
 
 
 
@@ -47,6 +73,7 @@ def slice_accelerometer_data(metadata_csv, raw_accel_data_dir, output_root):
 if __name__ == "__main__":
     metadata_csv_path = r"C:\Users\niki\Desktop\Step-counter\Data\acceleration_metadata.csv"
     raw_accel_data_dir = r"C:\Users\niki\Desktop\Step-counter\Data"
-    output_root = r"C:\Users\niki\Desktop\Step-counter\Data\output1"
+    output_root = r"C:\Users\niki\Desktop\Step-counter\Data\output"
     
-    slice_accelerometer_data(metadata_csv=metadata_csv_path, raw_accel_data_dir=raw_accel_data_dir, output_root=output_root)
+    scaling_data = slice_accelerometer_data(metadata_csv=metadata_csv_path, raw_accel_data_dir=raw_accel_data_dir, output_root=output_root)
+    scale_stepcounts_data(scaling_data)
