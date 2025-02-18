@@ -1,5 +1,6 @@
 import torch.nn as nn
 
+
 class StepCounterCNN(nn.Module):
     def __init__(self, window_size, num_features):
         super().__init__()
@@ -13,7 +14,7 @@ class StepCounterCNN(nn.Module):
 
         self.flatten = nn.Flatten()
         # After 2x pooling => window_size / 4
-        self.fc1 = nn.Linear((window_size//4)*64, 128)
+        self.fc1 = nn.Linear((window_size // 4) * 64, 128)
         self.relu3 = nn.ReLU()
         self.fc2 = nn.Linear(128, window_size)
         self.sigmoid = nn.Sigmoid()

@@ -37,7 +37,10 @@ def process_video(video_path, num_segments, display_video=False):
         return None
 
     pose = mp_pose.Pose()
-    joints_data = {joint: [] for joint in ["right_ankle", "left_ankle", "right_heel", "left_heel", "right_foot_index", "left_foot_index"]}
+    joints_data = {
+        joint: []
+        for joint in ["right_ankle", "left_ankle", "right_heel", "left_heel", "right_foot_index", "left_foot_index"]
+    }
 
     # Metadata placeholders
     frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
@@ -83,7 +86,7 @@ def process_video(video_path, num_segments, display_video=False):
     # Load the video audio file
     clip = VideoFileClip(video_path)
     if not clip.audio:
-            print("No audio track found; using full video range")
+        print("No audio track found; using full video range")
     else:
         audio_array = clip.audio.to_soundarray()
         audio_fps = clip.audio.fps
@@ -98,10 +101,9 @@ def process_video(video_path, num_segments, display_video=False):
         first_clap_frame = int(first_clap_time_sec * fps)
         second_clap_frame = int(second_clap_time_sec * fps)
 
-
         # Slice data in place
         for joint in joints_data:
-            joints_data[joint] = joints_data[joint][first_clap_frame: second_clap_frame + 1]
+            joints_data[joint] = joints_data[joint][first_clap_frame : second_clap_frame + 1]
 
         # update duration?
         new_frame_count = len(joints_data["right_ankle"])  # or any joint
@@ -124,7 +126,7 @@ def process_video(video_path, num_segments, display_video=False):
 def count_steps(joints_data):
     """
     Dynamically calculates steps from joint motion with adaptive prominence.
-    
+
     Parameters:
         joints_data (dict): Raw joint movement data.
 
@@ -164,7 +166,6 @@ def count_steps(joints_data):
     return step_counts_joint, smoothed_data, peaks_data, num_steps
 
 
-
 def visualize_data(joints_data, smoothed_data, peaks_data, output_path=None):
     """
     Visualizes joint motion and detected steps, using raw data, smoothed data, and peak indices.
@@ -189,7 +190,7 @@ def visualize_data(joints_data, smoothed_data, peaks_data, output_path=None):
         # Plot raw and smoothed data
         axs[i].plot(raw_data, label=f"{joint} (raw)", alpha=0.5, color=colors[i])
         axs[i].plot(smoothed, label=f"{joint} (smoothed)", linewidth=2, color=colors[i])
-        
+
         # Highlight detected steps (peaks)
         axs[i].scatter(peaks, smoothed[peaks], color="black", label=f"Detected Steps ({len(peaks)})")
         axs[i].legend()
@@ -208,6 +209,7 @@ def visualize_data(joints_data, smoothed_data, peaks_data, output_path=None):
         plt.show()
 
     plt.close(fig)
+
 
 def save_step_data_to_csv(output_folder, joints_data, smoothed_data, peaks_data, step_counts_joint):
     """
@@ -230,8 +232,9 @@ def save_step_data_to_csv(output_folder, joints_data, smoothed_data, peaks_data,
         writer.writerow(["Frame"] + list(joints_data.keys()))  # Header
         max_frames = max(len(data) for data in joints_data.values())
         for frame in range(max_frames):
-            row = [frame] + [joints_data[joint][frame] if frame < len(joints_data[joint]) else None
-                             for joint in joints_data]
+            row = [frame] + [
+                joints_data[joint][frame] if frame < len(joints_data[joint]) else None for joint in joints_data
+            ]
             writer.writerow(row)
     print(f"Rohdaten gespeichert: {raw_data_csv}")
 
@@ -242,8 +245,9 @@ def save_step_data_to_csv(output_folder, joints_data, smoothed_data, peaks_data,
         writer.writerow(["Frame"] + list(smoothed_data.keys()))  # Header
         max_frames = max(len(data) for data in smoothed_data.values())
         for frame in range(max_frames):
-            row = [frame] + [smoothed_data[joint][frame] if frame < len(smoothed_data[joint]) else None
-                             for joint in smoothed_data]
+            row = [frame] + [
+                smoothed_data[joint][frame] if frame < len(smoothed_data[joint]) else None for joint in smoothed_data
+            ]
             writer.writerow(row)
     print(f"Geglättete Daten gespeichert: {smoothed_data_csv}")
 

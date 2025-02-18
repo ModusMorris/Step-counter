@@ -2,6 +2,7 @@ import os
 import pandas as pd
 import numpy as np
 from clap_detection_methods import load_accelerometer_data
+
 # Function to slice and save accelerometer data
 
 
@@ -70,13 +71,12 @@ def scale_stepcounts_data(scaling_data):
         data.to_csv(scaled_step_counts_path, index=False)
 
 
-
-
-
 if __name__ == "__main__":
     metadata_csv_path = os.path.join(os.getcwd(), r"Data\acceleration_metadata.csv")
     raw_accel_data_dir = os.path.join(os.getcwd(), r"Data\accelerometer_data")
     output_root = os.path.join(os.getcwd(), r"Data\real_output")
-    
-    scaling_data = slice_accelerometer_data(metadata_csv=metadata_csv_path, raw_accel_data_dir=raw_accel_data_dir, output_root=output_root)
+
+    scaling_data = slice_accelerometer_data(
+        metadata_csv=metadata_csv_path, raw_accel_data_dir=raw_accel_data_dir, output_root=output_root
+    )
     scale_stepcounts_data(scaling_data)

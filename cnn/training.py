@@ -35,15 +35,17 @@ def load_all_datasets(root_folder, window_size, batch_size):
     print(f"{len(all_data_loaders)} datasets, total: {len(combined)} samples.")
     return combined
 
+
 # 2) Split into Train/Test (80/20)
 def split_dataset(dataset, ratio=0.2):
     length = len(dataset)
     idx = np.arange(length)
     train_idx, test_idx = train_test_split(idx, test_size=ratio, random_state=42)
     train_ds = Subset(dataset, train_idx)
-    test_ds  = Subset(dataset, test_idx)
+    test_ds = Subset(dataset, test_idx)
     print(f"Train: {len(train_ds)}, Test: {len(test_ds)}")
     return train_ds, test_ds
+
 
 # 3) Training
 def train_step_counter(root_folder, window_size=256, batch_size=32, epochs=5, lr=0.001):
@@ -55,7 +57,7 @@ def train_step_counter(root_folder, window_size=256, batch_size=32, epochs=5, lr
     # 2) 80/20 Split
     train_ds, test_ds = split_dataset(combined_dataset, ratio=0.2)
     train_loader = DataLoader(train_ds, batch_size=batch_size, shuffle=True)
-    test_loader  = DataLoader(test_ds, batch_size=batch_size, shuffle=False)
+    test_loader = DataLoader(test_ds, batch_size=batch_size, shuffle=False)
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = StepCounterCNN(window_size, 6).to(device)
@@ -70,12 +72,12 @@ def train_step_counter(root_folder, window_size=256, batch_size=32, epochs=5, lr
         ep_loss = 0.0
         with tqdm(total=len(train_loader), desc=f"Epoch {ep+1}/{epochs}") as pbar:
             for X, Y in train_loader:
-                X = X.float().to(device).permute(0,2,1)
+                X = X.float().to(device).permute(0, 2, 1)
                 Y = Y.float().to(device)
 
                 optimizer.zero_grad()
                 out = model(X)
-                loss= criterion(out, Y)
+                loss = criterion(out, Y)
                 loss.backward()
                 optimizer.step()
 
@@ -106,14 +108,7 @@ def train_step_counter(root_folder, window_size=256, batch_size=32, epochs=5, lr
 
 # 4) Evaluate Full Run - Ground Truth
 def evaluate_full_run_6channels_against_groundtruth_plotly(
-    model,
-    device,
-    left_csv,
-    right_csv,
-    stepcount_csv,
-    window_size=256,
-    peak_distance=10,
-    peak_height=0.5
+    model, device, left_csv, right_csv, stepcount_csv, window_size=256, peak_distance=10, peak_height=0.5
 ):
     """
     Erstellt einen interaktiven Plotly-Graphen mit den Beschleunigungsdaten und den erkannten sowie Ground-Truth-Schritten.
@@ -124,65 +119,82 @@ def evaluate_full_run_6channels_against_groundtruth_plotly(
     from tqdm import tqdm
     from scipy.signal import find_peaks
     from sklearn.preprocessing import StandardScaler
-    
+
     left_df = pd.read_csv(left_csv)
     right_df = pd.read_csv(right_csv)
     step_counts = pd.read_csv(stepcount_csv)
-    
-    left_df  = left_df.rename(columns={'X': 'Xl','Y':'Yl','Z':'Zl'})
-    right_df = right_df.rename(columns={'X': 'Xr','Y':'Yr','Z':'Zr'})
-    combined_df = pd.concat([left_df[['Xl','Yl','Zl']], right_df[['Xr','Yr','Zr']]], axis=1)
-    
+
+    left_df = left_df.rename(columns={"X": "Xl", "Y": "Yl", "Z": "Zl"})
+    right_df = right_df.rename(columns={"X": "Xr", "Y": "Yr", "Z": "Zr"})
+    combined_df = pd.concat([left_df[["Xl", "Yl", "Zl"]], right_df[["Xr", "Yr", "Zr"]]], axis=1)
+
     def extract_peaks(peaks_str):
         import ast
+
         if isinstance(peaks_str, str) and peaks_str.startswith("["):
             return ast.literal_eval(peaks_str)
         return []
-    
-    left_peaks  = extract_peaks(step_counts.loc[step_counts['Joint']=='left_foot_index','Peaks'].values[0])
-    right_peaks = extract_peaks(step_counts.loc[step_counts['Joint']=='right_foot_index','Peaks'].values[0])
+
+    left_peaks = extract_peaks(step_counts.loc[step_counts["Joint"] == "left_foot_index", "Peaks"].values[0])
+    right_peaks = extract_peaks(step_counts.loc[step_counts["Joint"] == "right_foot_index", "Peaks"].values[0])
     groundtruth_frames = set(left_peaks + right_peaks)
-    
+
     sc = StandardScaler()
     arr = sc.fit_transform(combined_df.values)  # shape=(Frames,6)
     arr = torch.tensor(arr, dtype=torch.float32, device=device)
-    
+
     model.eval()
     N = len(arr)
     frame_probs = np.zeros(N, dtype=np.float32)
     overlap_cnt = np.zeros(N, dtype=np.float32)
-    
+
     with torch.no_grad():
         for start in tqdm(range(N - window_size), desc="FullRunProcessing"):
-            window_ = arr[start : start+window_size].permute(1,0).unsqueeze(0)
+            window_ = arr[start : start + window_size].permute(1, 0).unsqueeze(0)
             out = model(window_)
-            frame_probs[start : start+window_size] += out.squeeze(0).cpu().numpy()
-            overlap_cnt[start : start+window_size] += 1
-    
+            frame_probs[start : start + window_size] += out.squeeze(0).cpu().numpy()
+            overlap_cnt[start : start + window_size] += 1
+
     valid = overlap_cnt > 0
     frame_probs[valid] /= overlap_cnt[valid]
-    
+
     peaks, _ = find_peaks(frame_probs, height=peak_height, distance=peak_distance)
     detected_frames = set(peaks.tolist())
-    
+
     fig = go.Figure()
     time_axis = np.arange(len(combined_df))
-    
+
     for col in combined_df.columns:
-        fig.add_trace(go.Scatter(x=time_axis, y=combined_df[col], mode='lines', name=col))
-    
-    fig.add_trace(go.Scatter(x=list(detected_frames), y=[frame_probs[i] for i in detected_frames],
-                             mode='markers', name='Detected Steps', marker=dict(color='red', size=8)))
-    
-    fig.add_trace(go.Scatter(x=list(groundtruth_frames), y=[frame_probs[i] for i in groundtruth_frames],
-                             mode='markers', name='Ground Truth Steps', marker=dict(color='green', symbol='x', size=8)))
-    
-    fig.update_layout(title="Accelerometer Data with Step Detection",
-                      xaxis_title="Frame",
-                      yaxis_title="Acceleration / Probability",
-                      legend_title="Legend",
-                      template="plotly_white")
-    
+        fig.add_trace(go.Scatter(x=time_axis, y=combined_df[col], mode="lines", name=col))
+
+    fig.add_trace(
+        go.Scatter(
+            x=list(detected_frames),
+            y=[frame_probs[i] for i in detected_frames],
+            mode="markers",
+            name="Detected Steps",
+            marker=dict(color="red", size=8),
+        )
+    )
+
+    fig.add_trace(
+        go.Scatter(
+            x=list(groundtruth_frames),
+            y=[frame_probs[i] for i in groundtruth_frames],
+            mode="markers",
+            name="Ground Truth Steps",
+            marker=dict(color="green", symbol="x", size=8),
+        )
+    )
+
+    fig.update_layout(
+        title="Accelerometer Data with Step Detection",
+        xaxis_title="Frame",
+        yaxis_title="Acceleration / Probability",
+        legend_title="Legend",
+        template="plotly_white",
+    )
+
     fig.show()
 
 
@@ -190,26 +202,21 @@ def main():
     root_folder = "D:\\Step-counter\\Output"
     window_size = 256
     batch_size = 32
-    epochs     = 5
+    epochs = 5
 
     # 1) Training
     model, test_loader, device = train_step_counter(
-        root_folder, window_size=window_size,
-        batch_size=batch_size, epochs=epochs
+        root_folder, window_size=window_size, batch_size=batch_size, epochs=epochs
     )
 
-    left_csv  = "D:/Step-counter/Output/GX010029/GX010029_left_acceleration_data.csv"
+    left_csv = "D:/Step-counter/Output/GX010029/GX010029_left_acceleration_data.csv"
     right_csv = "D:/Step-counter/Output/GX010029/GX010029_right_acceleration_data.csv"
     stepcount_csv = "D:/Step-counter/Output/GX010029/scaled_step_counts.csv"
 
     evaluate_full_run_6channels_against_groundtruth_plotly(
-        model, device, 
-        left_csv, right_csv, 
-        stepcount_csv,
-        window_size=256, 
-        peak_distance=10, 
-        peak_height=0.5
+        model, device, left_csv, right_csv, stepcount_csv, window_size=256, peak_distance=10, peak_height=0.5
     )
+
 
 if __name__ == "__main__":
     main()

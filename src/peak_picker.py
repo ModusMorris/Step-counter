@@ -9,15 +9,18 @@ def load_accelerometer_data(file_path):
     data = pd.read_csv(file_path)
     return data
 
+
 # Normalize accelerometer data
 def normalize_accelerometer_data(data):
-    norm = np.sqrt(data['X']**2 + data['Y']**2 + data['Z']**2) - data['Z']
+    norm = np.sqrt(data["X"] ** 2 + data["Y"] ** 2 + data["Z"] ** 2) - data["Z"]
     return norm.abs()
+
 
 # Detect peaks in normalized data
 def detect_peaks(normalized_data, distance=50, prominence=0.5):
     peaks, _ = find_peaks(normalized_data, distance=distance, prominence=prominence)
     return peaks
+
 
 # Load ground truth data
 def load_ground_truth(file_path):
@@ -34,12 +37,12 @@ def load_ground_truth(file_path):
     print(f"Available columns in {file_path}: {ground_truth.columns}")
 
     # Extract the 'Total' row
-    total_row = ground_truth[ground_truth['Joint'] == 'Total']
+    total_row = ground_truth[ground_truth["Joint"] == "Total"]
     if total_row.empty:
         raise ValueError("The ground truth file does not have a 'Total' row.")
-    
+
     # Get the total steps
-    total_steps = int(total_row.iloc[0]['Detected Steps'])
+    total_steps = int(total_row.iloc[0]["Detected Steps"])
     print(f"Total steps from ground truth: {total_steps}")
     return total_steps
 
@@ -51,6 +54,7 @@ def compare_with_ground_truth(detected_steps, ground_truth_steps):
     accuracy = detected_steps / ground_truth_steps * 100
     print(f"Accuracy: {accuracy:.2f}%")
     return accuracy
+
 
 # Process all folders
 def process_folders(root_dir):
@@ -87,18 +91,20 @@ def process_folders(root_dir):
 
             # Plot results
             plt.figure(figsize=(12, 6))
-            plt.plot(norm_data, label='Normalized Accelerometer Data (EMNO)', alpha=0.7)
-            plt.scatter(detected_peaks, norm_data[detected_peaks], color='red', label='Detected Peaks')
+            plt.plot(norm_data, label="Normalized Accelerometer Data (EMNO)", alpha=0.7)
+            plt.scatter(detected_peaks, norm_data[detected_peaks], color="red", label="Detected Peaks")
             plt.title(f"Step Detection for Video {folder_name}")
             plt.xlabel("Time (samples)")
             plt.ylabel("Acceleration Magnitude")
             plt.legend()
             plt.show()
 
+
 # Main function
 def main():
     root_dir = "D:\\Step-counter\\Output"  # Adjust this path to your root directory
     process_folders(root_dir)
+
 
 if __name__ == "__main__":
     main()
