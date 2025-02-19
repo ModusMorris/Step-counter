@@ -14,6 +14,7 @@ from scipy.signal import find_peaks
 from sklearn.preprocessing import StandardScaler
 import pandas as pd
 
+
 # 1) Load all folders & combine datasets
 def load_all_datasets(root_folder, window_size, batch_size):
     subfolders = [f.path for f in os.scandir(root_folder) if f.is_dir()]
@@ -60,7 +61,7 @@ def train_step_counter(root_folder, window_size=256, batch_size=32, epochs=5, lr
     test_loader = DataLoader(test_ds, batch_size=batch_size, shuffle=False)
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model = StepCounterCNN(window_size, 6).to(device)
+    model = StepCounterCNN(window_size).to(device)
 
     criterion = nn.BCELoss()
     optimizer = optim.Adam(model.parameters(), lr=lr)
@@ -72,9 +73,9 @@ def train_step_counter(root_folder, window_size=256, batch_size=32, epochs=5, lr
         ep_loss = 0.0
         with tqdm(total=len(train_loader), desc=f"Epoch {ep+1}/{epochs}") as pbar:
             for X, Y in train_loader:
-                X = X.float().to(device).permute(0, 2, 1)
-                Y = Y.float().to(device)
-
+                X = X.float().to(device).permute(0, 2, 1)  # Shape (Batch, 2, window_size)
+                Y = Y.float().to(device).mean(dim=1, keepdim=True)  # Mittelwert der Labels pro Fenster
+                
                 optimizer.zero_grad()
                 out = model(X)
                 loss = criterion(out, Y)
@@ -113,20 +114,25 @@ def evaluate_full_run_6channels_against_groundtruth_plotly(
     """
     Erstellt einen interaktiven Plotly-Graphen mit den Beschleunigungsdaten und den erkannten sowie Ground-Truth-Schritten.
     """
-    import pandas as pd
-    import numpy as np
-    import torch
-    from tqdm import tqdm
-    from scipy.signal import find_peaks
-    from sklearn.preprocessing import StandardScaler
 
     left_df = pd.read_csv(left_csv)
     right_df = pd.read_csv(right_csv)
     step_counts = pd.read_csv(stepcount_csv)
 
-    left_df = left_df.rename(columns={"X": "Xl", "Y": "Yl", "Z": "Zl"})
-    right_df = right_df.rename(columns={"X": "Xr", "Y": "Yr", "Z": "Zr"})
-    combined_df = pd.concat([left_df[["Xl", "Yl", "Zl"]], right_df[["Xr", "Yr", "Zr"]]], axis=1)
+    def compute_enmo(data):
+        """Berechnet die Euclidean Norm Minus One (ENMO)."""
+        norm = np.sqrt(data["X"]**2 + data["Y"]**2 + data["Z"]**2) - 1
+        return np.maximum(norm, 0)  # Negative Werte auf 0 setzen
+
+    # Berechne ENMO für links und rechts
+    left_df["ENMO"] = compute_enmo(left_df)
+    right_df["ENMO"] = compute_enmo(right_df)
+
+    # Erstelle DataFrame nur mit ENMO-Werten
+    combined_df = pd.DataFrame({
+        "ENMO_left": left_df["ENMO"],
+        "ENMO_right": right_df["ENMO"]
+    })
 
     def extract_peaks(peaks_str):
         import ast
@@ -214,7 +220,7 @@ def main():
     stepcount_csv = "D:/Step-counter/Output/GX010029/scaled_step_counts.csv"
 
     evaluate_full_run_6channels_against_groundtruth_plotly(
-        model, device, left_csv, right_csv, stepcount_csv, window_size=256, peak_distance=10, peak_height=0.5
+        model, device, left_csv, right_csv, stepcount_csv, window_size=256, peak_distance=10, peak_height=0.4
     )
 
 
