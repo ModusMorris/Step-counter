@@ -47,15 +47,17 @@ def save_metadata(metadata, video_path, metadata_csv, annotation_file=None):
 
             # Vergleiche berechnete Schritte mit manuellen Schritten
             if calculated_steps == manual_steps:
-                print(f"Schrittzählungen stimmen überein für '{video_filename}' (Manuell: {manual_steps}, Berechnet: {calculated_steps}).")
+                print(
+                    f"Schrittzählungen stimmen überein für '{video_filename}' (Manuell: {manual_steps}, Berechnet: {calculated_steps})."
+                )
                 summary["matches"] += 1
             else:
-                print(f"Schrittzählungen stimmen NICHT überein für '{video_filename}' (Manuell: {manual_steps}, Berechnet: {calculated_steps}). Überspringe.")
-                summary["non_matches"].append({
-                    "filename": video_filename,
-                    "manual_steps": manual_steps,
-                    "calculated_steps": calculated_steps
-                })
+                print(
+                    f"Schrittzählungen stimmen NICHT überein für '{video_filename}' (Manuell: {manual_steps}, Berechnet: {calculated_steps}). Überspringe."
+                )
+                summary["non_matches"].append(
+                    {"filename": video_filename, "manual_steps": manual_steps, "calculated_steps": calculated_steps}
+                )
                 return  # Nicht speichern, wenn Schritte nicht übereinstimmen
         else:
             print(f"Keine Annotation gefunden für '{video_filename}'. Verarbeite mit berechneten Schritten.")
@@ -70,14 +72,16 @@ def save_metadata(metadata, video_path, metadata_csv, annotation_file=None):
     if not is_video_in_csv(metadata_csv, os.path.basename(video_path)):
         with open(metadata_csv, "a", newline="") as file:
             writer = csv.writer(file)
-            writer.writerow([
-                os.path.basename(video_path),
-                metadata["resolution"],
-                metadata["fps"],
-                metadata["duration_seconds"],
-                metadata["creation_time"],
-                metadata["num_steps"]
-            ])
+            writer.writerow(
+                [
+                    os.path.basename(video_path),
+                    metadata["resolution"],
+                    metadata["fps"],
+                    metadata["duration_seconds"],
+                    metadata["creation_time"],
+                    metadata["num_steps"],
+                ]
+            )
         print(f"Metadaten für '{video_path}' gespeichert in '{metadata_csv}'.")
     else:
         print(f"Metadaten für '{video_path}' sind bereits in '{metadata_csv}'. Überspringe.")
@@ -120,4 +124,6 @@ def print_summary():
     if summary["non_matches"]:
         print("\nNon-Matching Annotations:")
         for item in summary["non_matches"]:
-            print(f"  - {item['filename']}: Manual Steps = {item['manual_steps']}, Calculated Steps = {item['calculated_steps']}")
+            print(
+                f"  - {item['filename']}: Manual Steps = {item['manual_steps']}, Calculated Steps = {item['calculated_steps']}"
+            )

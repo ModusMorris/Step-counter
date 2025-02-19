@@ -22,7 +22,7 @@ def process_and_visualize_video(video_path, output_root, metadata_csv, annotatio
     print(f"Verarbeite Video: {video_path}")
 
     # Speichern der Metadaten
-    #save_metadata(video_path, metadata_csv, annotation_file if annotation_file else None)
+    # save_metadata(video_path, metadata_csv, annotation_file if annotation_file else None)
 
     # Verarbeitung und Visualisierung
     result = process_video(video_path, num_segments=4, display_video=False)
@@ -66,24 +66,29 @@ def main():
     Hauptfunktion für die Videoverarbeitung.
     """
     parser = argparse.ArgumentParser(description="Video Processing Script")
-    parser.add_argument("--action", type=str, choices=["save_metadata", "process_data"], required=True,
-                        help="Aktion: 'save_metadata' oder 'process_data'.")
-    parser.add_argument("--root_dir", type=str,
-                        help="Verzeichnis mit Videos (benötigt für 'save_metadata' und 'process_data').")
-    parser.add_argument("--video_path", type=str,
-                        help="Pfad zu einem bestimmten Video (nur für 'process_data').")
-    parser.add_argument("--output_root", type=str, default="output",
-                        help="Root-Verzeichnis für die Ausgabedateien.")
-    parser.add_argument("--annotation_file", type=str, required=False,
-                        help="Pfad zur Excel-Datei mit manuellen Annotationen.")
+    parser.add_argument(
+        "--action",
+        type=str,
+        choices=["save_metadata", "process_data"],
+        required=True,
+        help="Aktion: 'save_metadata' oder 'process_data'.",
+    )
+    parser.add_argument(
+        "--root_dir", type=str, help="Verzeichnis mit Videos (benötigt für 'save_metadata' und 'process_data')."
+    )
+    parser.add_argument("--video_path", type=str, help="Pfad zu einem bestimmten Video (nur für 'process_data').")
+    parser.add_argument("--output_root", type=str, default="output", help="Root-Verzeichnis für die Ausgabedateien.")
+    parser.add_argument(
+        "--annotation_file", type=str, required=False, help="Pfad zur Excel-Datei mit manuellen Annotationen."
+    )
 
     args = parser.parse_args()
 
     if args.action == "process_data":
         if args.video_path:
-            process_and_visualize_video(args.video_path, args.output_root, 
-                                        os.path.join(args.output_root, "metadata.csv"), 
-                                        args.annotation_file)
+            process_and_visualize_video(
+                args.video_path, args.output_root, os.path.join(args.output_root, "metadata.csv"), args.annotation_file
+            )
         elif args.root_dir:
             process_all_videos_in_directory(args.root_dir, args.output_root, args.annotation_file)
         else:
