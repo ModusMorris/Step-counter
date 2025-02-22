@@ -63,7 +63,7 @@ def train_step_counter(root_folder, window_size=256, batch_size=32, epochs=5, lr
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = StepCounterCNN(window_size).to(device)
 
-    criterion = nn.BCELoss()
+    criterion = nn.BCELoss(weight=torch.tensor([5.0], device=device))
     optimizer = optim.Adam(model.parameters(), lr=lr)
     losses = []
 
@@ -74,7 +74,7 @@ def train_step_counter(root_folder, window_size=256, batch_size=32, epochs=5, lr
         with tqdm(total=len(train_loader), desc=f"Epoch {ep+1}/{epochs}") as pbar:
             for X, Y in train_loader:
                 X = X.float().to(device).permute(0, 2, 1)  # Shape (Batch, 2, window_size)
-                Y = Y.float().to(device).mean(dim=1, keepdim=True)  # Mittelwert der Labels pro Fenster
+                Y = Y.float().to(device).max(dim=1, keepdim=True)[0]  # Mittelwert der Labels pro Fenster
                 
                 optimizer.zero_grad()
                 out = model(X)
@@ -156,7 +156,7 @@ def evaluate_full_run_6channels_against_groundtruth_plotly(
 
     with torch.no_grad():
         for start in tqdm(range(N - window_size), desc="FullRunProcessing"):
-            window_ = arr[start : start + window_size].permute(1, 0).unsqueeze(0)
+            window_ = arr[start : start + window_size, :4].permute(1, 0).unsqueeze(0)
             out = model(window_)
             frame_probs[start : start + window_size] += out.squeeze(0).cpu().numpy()
             overlap_cnt[start : start + window_size] += 1
@@ -164,7 +164,7 @@ def evaluate_full_run_6channels_against_groundtruth_plotly(
     valid = overlap_cnt > 0
     frame_probs[valid] /= overlap_cnt[valid]
 
-    peaks, _ = find_peaks(frame_probs, height=peak_height, distance=peak_distance)
+    peaks, _ = find_peaks(frame_probs, height=0.02, distance=30, prominence=0.05)
     detected_frames = set(peaks.tolist())
 
     fig = go.Figure()
@@ -202,11 +202,16 @@ def evaluate_full_run_6channels_against_groundtruth_plotly(
     )
 
     fig.show()
+    
+    print("\n==== Debugging CNN Predictions ====")
+    print("Frame probabilities (first 20 values):", frame_probs[:20])
+    print("Max probability from CNN:", np.max(frame_probs))
+    print("Mean probability from CNN:", np.mean(frame_probs))
 
 
 def main():
     root_folder = "D:\\Step-counter\\Output"
-    window_size = 256
+    window_size = 64
     batch_size = 32
     epochs = 5
 
@@ -220,7 +225,7 @@ def main():
     stepcount_csv = "D:/Step-counter/Output/GX010029/scaled_step_counts.csv"
 
     evaluate_full_run_6channels_against_groundtruth_plotly(
-        model, device, left_csv, right_csv, stepcount_csv, window_size=256, peak_distance=10, peak_height=0.4
+        model, device, left_csv, right_csv, stepcount_csv, window_size=window_size, peak_distance=10, peak_height=0.4
     )
 
 
