@@ -2,9 +2,9 @@ import torch.nn as nn
 
 
 class StepCounterCNN(nn.Module):
-    def __init__(self, window_size, num_features):
+    def __init__(self, window_size):
         super().__init__()
-        self.conv1 = nn.Conv1d(num_features, 32, kernel_size=5, padding=2)
+        self.conv1 = nn.Conv1d(2, 32, kernel_size=5, padding=2)  # 2 statt 6 Kanäle
         self.relu1 = nn.ReLU()
         self.pool1 = nn.MaxPool1d(kernel_size=2)
 
@@ -13,16 +13,12 @@ class StepCounterCNN(nn.Module):
         self.pool2 = nn.MaxPool1d(kernel_size=2)
 
         self.flatten = nn.Flatten()
-        # After 2x pooling => window_size / 4
         self.fc1 = nn.Linear((window_size // 4) * 64, 128)
         self.relu3 = nn.ReLU()
-        self.fc2 = nn.Linear(128, window_size)
+        self.fc2 = nn.Linear(128, 1)  # Statt window_size eine einzelne Wahrsch.
         self.sigmoid = nn.Sigmoid()
 
     def forward(self, x):
-        """
-        x shape: (Batch, 6, window_size)
-        """
         x = self.conv1(x)
         x = self.relu1(x)
         x = self.pool1(x)
