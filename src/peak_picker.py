@@ -36,11 +36,11 @@ def load_ground_truth(file_path):
 # Compare detected steps to ground truth
 def compare_with_ground_truth(detected_steps, ground_truth_steps, foot="both"):
     """Compares detected peaks with ground truth steps."""
-    print(f"👣 {foot.capitalize()} Foot - Detected Steps: {detected_steps}")
-    print(f"🎯 Ground Truth Steps: {ground_truth_steps}")
+    print(f"{foot.capitalize()} Foot - Detected Steps: {detected_steps}")
+    print(f"Ground Truth Steps: {ground_truth_steps}")
     
     accuracy = (detected_steps / ground_truth_steps) * 100
-    print(f"📊 Accuracy: {accuracy:.2f}%")
+    print(f"Accuracy: {accuracy:.2f}%")
     
     return accuracy
 
@@ -52,7 +52,7 @@ def process_folders(root_dir):
         if not os.path.isdir(folder_path):  # Skip non-directories
             continue
 
-        print(f"\n📂 Processing folder: {folder_name}")
+        print(f"\nProcessing folder: {folder_name}")
 
         # Paths to accelerometer data (left & right) and ground truth
         left_accel_file = os.path.join(folder_path, f"{folder_name}_left_acceleration_data.csv")
@@ -61,10 +61,10 @@ def process_folders(root_dir):
 
         # Check if files exist
         if not os.path.exists(left_accel_file) or not os.path.exists(right_accel_file):
-            print(f"❌ Missing accelerometer files in {folder_name}. Skipping.")
+            print(f"Missing accelerometer files in {folder_name}. Skipping.")
             continue
         if not os.path.exists(ground_truth_file):
-            print(f"❌ Missing ground truth file in {folder_name}. Skipping.")
+            print(f"Missing ground truth file in {folder_name}. Skipping.")
             continue
 
         # Load and process left & right foot accelerometer data
