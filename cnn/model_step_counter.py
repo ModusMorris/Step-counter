@@ -4,7 +4,7 @@ import torch.nn as nn
 class StepCounterCNN(nn.Module):
     def __init__(self, window_size):
         super().__init__()
-        self.conv1 = nn.Conv1d(2, 32, kernel_size=5, padding=2) 
+        self.conv1 = nn.Conv1d(2, 32, kernel_size=5, padding=2)
         self.relu1 = nn.ReLU()
         self.pool1 = nn.MaxPool1d(kernel_size=2)
         self.batch_norm1 = nn.BatchNorm1d(32)
@@ -14,7 +14,7 @@ class StepCounterCNN(nn.Module):
         self.pool2 = nn.MaxPool1d(kernel_size=2)
         self.batch_norm2 = nn.BatchNorm1d(64)
 
-        fc1_input_size = (window_size // 4) * 64  
+        fc1_input_size = (window_size // 4) * 64
         self.fc1 = nn.Linear(fc1_input_size, 128)
         self.relu3 = nn.ReLU()
         self.fc2 = nn.Linear(128, 1)

@@ -3,12 +3,14 @@ import numpy as np
 import pandas as pd
 from sklearn.preprocessing import StandardScaler
 from torch.utils.data import Dataset, DataLoader
-import ast  
+import ast
+
 
 def compute_enmo(data):
-    #calculate ENMNO for data
-    norm = np.sqrt(data["X"]**2 + data["Y"]**2 + data["Z"]**2) - 1
+    # calculate ENMNO for data
+    norm = np.sqrt(data["X"] ** 2 + data["Y"] ** 2 + data["Z"] ** 2) - 1
     return np.maximum(norm, 0)  # Negative Werte auf 0 setzen
+
 
 class StepCounterDataset(Dataset):
     def __init__(self, left_data, right_data, step_counts, window_size):
@@ -61,9 +63,9 @@ class StepCounterDataset(Dataset):
 
         print("\nTotal peaks found: Left =", len(left_peaks), ", Right =", len(right_peaks))
         print("==================================\n")
-    
+
     def __len__(self):
-        return len(self.data) - self.window_size 
+        return len(self.data) - self.window_size
 
     def __getitem__(self, idx):
         x = self.data[idx : idx + self.window_size]
@@ -71,7 +73,6 @@ class StepCounterDataset(Dataset):
         return x, y
 
 
-    
 def load_datasets(folder_path, window_size, batch_size):
     """
     Reads (foldername)_left_acceleration_data.csv,
