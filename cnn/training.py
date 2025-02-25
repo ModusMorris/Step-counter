@@ -5,26 +5,24 @@ import torch.nn as nn
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
-import plotly.graph_objects as go
 from tqdm import tqdm
 from sklearn.model_selection import train_test_split
 from data_generator import load_datasets
 from model_step_counter import StepCounterCNN
 from torch.utils.data import DataLoader, ConcatDataset, Subset
-from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import classification_report, confusion_matrix, roc_curve, auc
-import pandas as pd
-from scipy.signal import find_peaks
+from prediction import main as prediction
+
 
 def load_all_datasets(root_folder, window_size, batch_size):
     """
     Loads all datasets from subfolders in the given root folder.
-    
+
     Parameters:
     root_folder (str): Path to the root directory containing dataset folders.
     window_size (int): Number of samples per window for the model.
     batch_size (int): Number of samples per batch.
-    
+
     Returns:
     ConcatDataset: Combined dataset from all subfolders.
     """
@@ -32,26 +30,31 @@ def load_all_datasets(root_folder, window_size, batch_size):
     if not subfolders:
         print("No folders found in", root_folder)
         return None
-    
+
     # Load datasets from each subfolder
-    all_data_loaders = [load_datasets(sf, window_size, batch_size).dataset for sf in subfolders if load_datasets(sf, window_size, batch_size) is not None]
+    all_data_loaders = [
+        load_datasets(sf, window_size, batch_size).dataset
+        for sf in subfolders
+        if load_datasets(sf, window_size, batch_size) is not None
+    ]
     if not all_data_loaders:
         print("No datasets available!")
         return None
-    
+
     # Combine all datasets into one
     combined = ConcatDataset(all_data_loaders)
     print(f"{len(all_data_loaders)} datasets, total: {len(combined)} samples.")
     return combined
 
+
 def split_dataset(dataset, ratio=0.2):
     """
     Splits the dataset into training and testing sets.
-    
+
     Parameters:
     dataset (ConcatDataset): The dataset to be split.
     ratio (float): The proportion of data to be used for testing. Default is 0.2 (20%).
-    
+
     Returns:
     Tuple[Subset, Subset]: Training and testing dataset subsets.
     """
@@ -59,38 +62,83 @@ def split_dataset(dataset, ratio=0.2):
     print(f"Train samples: {len(train_idx)}, Test samples: {len(test_idx)}")
     return Subset(dataset, train_idx), Subset(dataset, test_idx)
 
-def train_step_counter(root_folder, window_size=256, batch_size=32, epochs=5, lr=0.001):
-    """
-    Loads data, trains the step counter CNN model, and evaluates loss.
-    
-    Parameters:
-    root_folder (str): Path to the dataset directory.
-    window_size (int): Number of samples per input window.
-    batch_size (int): Number of samples per batch.
-    epochs (int): Number of training epochs.
-    lr (float): Learning rate for the optimizer.
-    
-    Returns:
-    Tuple[StepCounterCNN, DataLoader, torch.device]: Trained model, test data loader, and device used.
-    """
+
+class EarlyStopping:
+    def __init__(self, patience=4, min_delta=0.005, path="best_model.pth"):
+        """
+        Initializes the EarlyStopping mechanism.
+
+        Args:
+            patience (int): Number of epochs to wait for improvement before stopping.
+            min_delta (float): Minimum improvement in validation loss to be considered significant.
+            path (str): File path where the best model will be saved.
+        """
+        self.patience = patience  # Number of epochs with no improvement before stopping
+        self.min_delta = min_delta  # Minimum required change in validation loss
+        self.path = path  # Path to save the best model
+        self.best_loss = float("inf")  # Initialize best validation loss as infinity
+        self.counter = 0  # Counter to track epochs without improvement
+        self.best_epoch = 0  # Stores the epoch with the best validation loss
+        self.best_train_loss = float("inf")  # Stores the training loss of the best model
+
+    def check(self, train_loss, val_loss, model, epoch):
+        """
+        Checks whether training should stop early based on validation loss.
+
+        Args:
+            train_loss (float): Current training loss.
+            val_loss (float): Current validation loss.
+            model (torch.nn.Module): The PyTorch model being trained.
+            epoch (int): The current epoch number.
+
+        Returns:
+            bool: True if training should stop, False otherwise.
+        """
+
+        # If the validation loss improves significantly, save the model
+        if val_loss < self.best_loss - self.min_delta:
+            self.best_loss = val_loss  # Update best validation loss
+            self.best_train_loss = train_loss  # Store corresponding training loss
+            self.best_epoch = epoch  # Store epoch number of the best model
+            self.counter = 0  # Reset counter since there was an improvement
+            torch.save(model.state_dict(), self.path)  # Save the best model checkpoint
+
+        # Check if overfitting occurs (training loss is much lower than validation loss)
+        elif abs(train_loss - val_loss) > self.min_delta and val_loss >= self.best_loss:
+            print("Early stopping triggered due to overfitting!")  # Print warning
+            model.load_state_dict(torch.load(self.path))  # Load the best saved model
+            return True  # Stop training
+
+        else:
+            # No significant improvement, increment counter
+            self.counter += 1
+
+            # If patience limit is reached, stop training
+            if self.counter >= self.patience:
+                print(f"Early stopping triggered! Best model from epoch {self.best_epoch + 1} loaded from {self.path}")
+                model.load_state_dict(torch.load(self.path))  # Load the best model
+                return True  # Stop training
+
+        return False  # Continue training
+
+
+def train_step_counter(root_folder, window_size=256, batch_size=32, epochs=5, lr=0.001, patience=4):
     combined_dataset = load_all_datasets(root_folder, window_size, batch_size)
     if combined_dataset is None:
         return None, None, None
-    
-    # Split dataset into training and testing sets
+
     train_ds, test_ds = split_dataset(combined_dataset)
     train_loader = DataLoader(train_ds, batch_size=batch_size, shuffle=True)
     test_loader = DataLoader(test_ds, batch_size=batch_size, shuffle=False)
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = StepCounterCNN(window_size).to(device).float()
-    
-    # Define loss function and optimizer
+
     criterion = nn.BCELoss(weight=torch.tensor([5.0], device=device).float())
     optimizer = optim.Adam(model.parameters(), lr=lr)
     train_losses, test_losses = [], []
+    early_stopping = EarlyStopping(patience=patience)
 
-    # Training loop
     model.train()
     for ep in range(epochs):
         ep_loss = 0.0
@@ -103,37 +151,44 @@ def train_step_counter(root_folder, window_size=256, batch_size=32, epochs=5, lr
                 optimizer.step()
                 ep_loss += loss.item()
                 pbar.update(1)
-                
-        # Store training loss
+
         train_losses.append(ep_loss / len(train_loader))
-        
-        # Evaluate test loss
+
         model.eval()
         with torch.no_grad():
-            test_loss = sum(criterion(model(X.float().to(device).permute(0, 2, 1)), Y.float().to(device).max(dim=1, keepdim=True)[0]).item() for X, Y in test_loader) / len(test_loader)
+            test_loss = sum(
+                criterion(
+                    model(X.float().to(device).permute(0, 2, 1)), Y.float().to(device).max(dim=1, keepdim=True)[0]
+                ).item()
+                for X, Y in test_loader
+            ) / len(test_loader)
         test_losses.append(test_loss)
         print(f"\U0001F535 Epoch {ep+1}, Train Loss: {train_losses[-1]:.4f}, Test Loss: {test_losses[-1]:.4f}")
-    
-    # Plot loss curves
+
+        if early_stopping.check(train_losses[-1], test_losses[-1], model, ep):
+            break
+
     plt.plot(train_losses, label="Training Loss")
-    plt.plot(test_losses, label="Test Loss", linestyle='dashed')
-    plt.legend(), plt.grid(), plt.show()
-    
-    # Save model
-    save_path = os.path.join(root_folder, "step_counter_cnn.pth")
-    torch.save(model.state_dict(), save_path)
-    print(f"Model saved: {save_path}")
+    plt.plot(test_losses, label="Test Loss", linestyle="dashed")
+    plt.xlabel("Epoch")
+    plt.ylabel("Loss")
+    plt.legend()
+    plt.grid()
+    plt.show()
+
+    print(f"The model was saved at epoch {early_stopping.best_epoch + 1}.")
     return model, test_loader, device
+
 
 def evaluate_model(model, test_loader, device):
     """
     Evaluates the trained model using a test dataset and generates performance metrics.
-    
+
     Parameters:
     model (torch.nn.Module): Trained model to be evaluated.
     test_loader (DataLoader): DataLoader for the test dataset.
     device (torch.device): The device (CPU/GPU) on which evaluation is performed.
-    
+
     Outputs:
     - Prints a classification report.
     - Displays a confusion matrix.
@@ -150,25 +205,24 @@ def evaluate_model(model, test_loader, device):
             y_pred.extend(predictions.flatten())
             y_scores.extend(outputs.flatten())
 
-    
     print("Classification Report:")
     print(classification_report(y_true, y_pred))
-    
+
     cm = confusion_matrix(y_true, y_pred)
     plt.figure(figsize=(6, 5))
-    sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', xticklabels=['No Step', 'Step'], yticklabels=['No Step', 'Step'])
+    sns.heatmap(cm, annot=True, fmt="d", cmap="Blues", xticklabels=["No Step", "Step"], yticklabels=["No Step", "Step"])
     plt.xlabel("Predicted")
     plt.ylabel("Actual")
     plt.title("Confusion Matrix")
     plt.show()
-    
+
     # ROC Curve
     fpr, tpr, _ = roc_curve(y_true, y_scores)
     roc_auc = auc(fpr, tpr)
-    
+
     plt.figure(figsize=(6, 5))
-    plt.plot(fpr, tpr, color='blue', lw=2, label=f'ROC curve (area = {roc_auc:.2f})')
-    plt.plot([0, 1], [0, 1], color='gray', linestyle='dashed')
+    plt.plot(fpr, tpr, color="blue", lw=2, label=f"ROC curve (area = {roc_auc:.2f})")
+    plt.plot([0, 1], [0, 1], color="gray", linestyle="dashed")
     plt.xlabel("False Positive Rate")
     plt.ylabel("True Positive Rate")
     plt.title("ROC Curve")
@@ -177,145 +231,23 @@ def evaluate_model(model, test_loader, device):
     plt.show()
 
 
-def evaluate_full_run_6channels_against_groundtruth_plotly(
-    model, device, left_csv, right_csv, stepcount_csv, window_size=256, peak_distance=10, peak_height=0.5
-):
-    """
-    Evaluates the full run by comparing the model's step detection against ground truth.
-    Generates an interactive Plotly graph with acceleration data and detected steps.
-    
-    Parameters:
-    model (torch.nn.Module): Trained step detection model.
-    device (torch.device): The device (CPU/GPU) for processing.
-    left_csv (str): Path to CSV file containing left foot acceleration data.
-    right_csv (str): Path to CSV file containing right foot acceleration data.
-    stepcount_csv (str): Path to CSV file containing ground truth step data.
-    window_size (int, optional): Size of the sliding window for processing. Default is 256.
-    peak_distance (int, optional): Minimum distance between detected peaks (steps). Default is 10.
-    peak_height (float, optional): Minimum height for peak detection. Default is 0.5.
-    
-    Outputs:
-    - Displays an interactive Plotly graph with acceleration data and step detection results.
-    - Prints debugging information for CNN predictions.
-    """
-    left_df = pd.read_csv(left_csv)
-    right_df = pd.read_csv(right_csv)
-    step_counts = pd.read_csv(stepcount_csv)
-
-    def compute_enmo(data):
-        """Computes the Euclidean Norm Minus One (ENMO) from accelerometer data."""
-        norm = np.sqrt(data["X"]**2 + data["Y"]**2 + data["Z"]**2) - 1
-        return np.maximum(norm, 0)  # Set negative values to 0
-
-    # Compute ENMO for left and right foot acceleration
-    left_df["ENMO"] = compute_enmo(left_df)
-    right_df["ENMO"] = compute_enmo(right_df)
-
-    # Create a DataFrame with only ENMO values
-    combined_df = pd.DataFrame({
-        "ENMO_left": left_df["ENMO"],
-        "ENMO_right": right_df["ENMO"]
-    })
-
-    def extract_peaks(peaks_str):
-        """Extracts peak values from a string representation of a list."""
-        import ast
-        if isinstance(peaks_str, str) and peaks_str.startswith("["):
-            return ast.literal_eval(peaks_str)
-        return []
-
-    # Extract ground truth step frames
-    left_peaks = extract_peaks(step_counts.loc[step_counts["Joint"] == "left_foot_index", "Peaks"].values[0])
-    right_peaks = extract_peaks(step_counts.loc[step_counts["Joint"] == "right_foot_index", "Peaks"].values[0])
-    groundtruth_frames = set(left_peaks + right_peaks)
-
-    # Normalize data using StandardScaler
-    sc = StandardScaler()
-    arr = sc.fit_transform(combined_df.values)  # shape=(Frames, 2)
-    arr = torch.tensor(arr, dtype=torch.float32, device=device)
-
-    model.eval()
-    N = len(arr)
-    frame_probs = np.zeros(N, dtype=np.float32)
-    overlap_cnt = np.zeros(N, dtype=np.float32)
-
-    # Sliding window approach for step detection
-    with torch.no_grad():
-        for start in tqdm(range(N - window_size), desc="FullRunProcessing"):
-            window_ = arr[start : start + window_size, :].permute(1, 0).unsqueeze(0)
-            out = model(window_)
-            frame_probs[start : start + window_size] += out.squeeze(0).cpu().numpy()
-            overlap_cnt[start : start + window_size] += 1
-
-    # Normalize probabilities by overlap count
-    valid = overlap_cnt > 0
-    frame_probs[valid] /= overlap_cnt[valid]
-
-    # Detect peaks in model output probabilities
-    peaks, _ = find_peaks(frame_probs, height=0.02, distance=30, prominence=0.05)
-    detected_frames = set(peaks.tolist())
-
-    # Create Plotly figure
-    fig = go.Figure()
-    time_axis = np.arange(len(combined_df))
-
-    for col in combined_df.columns:
-        fig.add_trace(go.Scatter(x=time_axis, y=combined_df[col], mode="lines", name=col))
-
-    fig.add_trace(
-        go.Scatter(
-            x=list(detected_frames),
-            y=[frame_probs[i] for i in detected_frames],
-            mode="markers",
-            name="Detected Steps",
-            marker=dict(color="red", size=8),
-        )
-    )
-
-    fig.add_trace(
-        go.Scatter(
-            x=list(groundtruth_frames),
-            y=[frame_probs[i] for i in groundtruth_frames],
-            mode="markers",
-            name="Ground Truth Steps",
-            marker=dict(color="green", symbol="x", size=8),
-        )
-    )
-
-    fig.update_layout(
-        title="Accelerometer Data with Step Detection",
-        xaxis_title="Frame",
-        yaxis_title="Acceleration / Probability",
-        legend_title="Legend",
-        template="plotly_white",
-    )
-
-    fig.show()
-    
-    print("\n==== Debugging CNN Predictions ====")
-    print("Frame probabilities (first 20 values):", frame_probs[:20])
-    print("Max probability from CNN:", np.max(frame_probs))
-    print("Mean probability from CNN:", np.mean(frame_probs))
-
-
-
 def main():
     root_folder = "D:/Daisy/5. Semester/SmartHealth/Step-counter/Output/processed_sliced_and_scaled data/real_output"
     window_size = 64
-    batch_size = 32
-    epochs = 5
+    batch_size = 128
+    epochs = 20
 
-    model, test_loader, device = train_step_counter(root_folder, window_size, batch_size, epochs)
+    model, test_loader, device = train_step_counter(root_folder, window_size, batch_size, epochs, 1e-3)
     if model is not None and test_loader is not None:
         evaluate_model(model, test_loader, device)
-    
-    left_csv = "D:/Daisy/5. Semester/SmartHealth/Step-counter/Output/processed_sliced_and_scaled data/real_output/GX010029/GX010029_left_acceleration_data.csv"
-    right_csv = "D:/Daisy/5. Semester/SmartHealth/Step-counter/Output/processed_sliced_and_scaled data/real_output/GX010029/GX010029_right_acceleration_data.csv"
-    stepcount_csv = "D:/Daisy/5. Semester/SmartHealth/Step-counter/Output/processed_sliced_and_scaled data/real_output/GX010029/scaled_step_counts.csv"
 
-    evaluate_full_run_6channels_against_groundtruth_plotly(
-        model, device, left_csv, right_csv, stepcount_csv, window_size=window_size, peak_distance=10, peak_height=0.4
-    )
+    model_path = "best_model.pth"
+    left_csv = "D:/Daisy/5. Semester/SmartHealth/Step-counter/Output/processed_sliced_and_scaled data/test/005/005_left_acceleration_data.csv"
+    right_csv = "D:/Daisy/5. Semester/SmartHealth/Step-counter/Output/processed_sliced_and_scaled data/test/005/005_right_acceleration_data.csv"
+    stepcount_csv = "D:/Daisy/5. Semester/SmartHealth/Step-counter/Output/processed_sliced_and_scaled data/test/005/scaled_step_counts.csv"
+
+    prediction(model_path, left_csv, right_csv, stepcount_csv)
+
 
 if __name__ == "__main__":
     main()
