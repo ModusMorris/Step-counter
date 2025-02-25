@@ -9,11 +9,13 @@ def load_accelerometer_data(file_path):
     """Loads accelerometer data from CSV."""
     return pd.read_csv(file_path)
 
+
 # Normalize accelerometer data
 def normalize_accelerometer_data(data):
     """Computes ENMO (Euclidean Norm Minus One) for accelerometer data."""
     norm = np.sqrt(data["X"] ** 2 + data["Y"] ** 2 + data["Z"] ** 2) - 1
     return np.maximum(norm, 0)  # Negative values set to zero
+
 
 # Detect peaks in normalized data
 def detect_peaks(normalized_data, distance=50, prominence=0.5):
@@ -21,28 +23,31 @@ def detect_peaks(normalized_data, distance=50, prominence=0.5):
     peaks, _ = find_peaks(normalized_data, distance=distance, prominence=prominence)
     return peaks
 
+
 # Load ground truth data
 def load_ground_truth(file_path):
     """Loads total step count from ground truth CSV."""
     ground_truth = pd.read_csv(file_path)
     total_row = ground_truth[ground_truth["Joint"] == "Total"]
-    
+
     if total_row.empty:
         raise ValueError("The ground truth file does not have a 'Total' row.")
 
     total_steps = int(total_row.iloc[0]["Detected Steps"])
     return total_steps
 
+
 # Compare detected steps to ground truth
 def compare_with_ground_truth(detected_steps, ground_truth_steps, foot="both"):
     """Compares detected peaks with ground truth steps."""
     print(f"{foot.capitalize()} Foot - Detected Steps: {detected_steps}")
     print(f"Ground Truth Steps: {ground_truth_steps}")
-    
+
     accuracy = (detected_steps / ground_truth_steps) * 100
     print(f"Accuracy: {accuracy:.2f}%")
-    
+
     return accuracy
+
 
 # Process all folders
 def process_folders(root_dir):
@@ -93,7 +98,7 @@ def process_folders(root_dir):
         plt.figure(figsize=(12, 6))
         plt.plot(left_norm, label="Left Foot ENMO", color="blue", alpha=0.7)
         plt.plot(right_norm, label="Right Foot ENMO", color="red", alpha=0.7)
-        
+
         plt.scatter(left_peaks, left_norm[left_peaks], color="green", label="Left Foot Peaks", marker="x")
         plt.scatter(right_peaks, right_norm[right_peaks], color="orange", label="Right Foot Peaks", marker="o")
 
@@ -103,10 +108,12 @@ def process_folders(root_dir):
         plt.legend()
         plt.show()
 
+
 # Main function
 def main():
     root_dir = "D:\\Step-counter\\Output"  # Adjust path to dataset directory
     process_folders(root_dir)
+
 
 if __name__ == "__main__":
     main()
