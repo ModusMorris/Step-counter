@@ -1,30 +1,7 @@
 import os
 import csv
 from tqdm import tqdm
-
-
-def is_video_in_csv(csv_file, video_filename):
-    """
-    Checks if a video's metadata is already in the CSV file.
-
-    Parameters:
-        csv_file (str): Path to the CSV file.
-        video_filename (str): Name of the video file.
-
-    Returns:
-        bool: True if the video is already in the CSV, False otherwise.
-    """
-    if not os.path.exists(csv_file):
-        # If the CSV file does not exist, treat it as empty
-        return False
-
-    with open(csv_file, "r") as file:
-        reader = csv.DictReader(file)
-        for row in reader:
-            if row["filename"] == video_filename:
-                return True
-    return False
-
+from metadata_handler import is_video_in_csv  # Import the function from metadata_handler.py
 
 def count_videos_in_directory(root_dir):
     """
@@ -49,7 +26,6 @@ def count_videos_in_directory(root_dir):
             if file_ext in video_extensions:  # Check if the file is a video
                 count += 1
     return count
-
 
 def video_file_generator(root_dir, metadata_csv):
     """
@@ -82,7 +58,7 @@ def video_file_generator(root_dir, metadata_csv):
             for video_path in video_files:
                 video_filename = os.path.basename(video_path)
 
-                # Check if the video is already in the CSV
+                # Check if the video is already in the CSV (using imported function)
                 if is_video_in_csv(metadata_csv, video_filename):
                     print(f"Skipping: {video_filename} (already in metadata).")
                     skipped += 1
