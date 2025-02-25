@@ -3,6 +3,7 @@ import csv
 from tqdm import tqdm
 from metadata_handler import is_video_in_csv  # Import the function from metadata_handler.py
 
+
 def count_videos_in_directory(root_dir):
     """
     Counts the total number of video files in the directory and its subdirectories.
@@ -26,6 +27,7 @@ def count_videos_in_directory(root_dir):
             if file_ext in video_extensions:  # Check if the file is a video
                 count += 1
     return count
+
 
 def video_file_generator(root_dir, metadata_csv):
     """
