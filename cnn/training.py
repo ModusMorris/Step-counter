@@ -232,7 +232,7 @@ def evaluate_model(model, test_loader, device):
 
 
 def main():
-    root_folder = "D:/Daisy/5. Semester/SmartHealth/Step-counter/Output/processed_sliced_and_scaled data/real_output"
+    root_folder = "D:\Step-counter\Output"
     window_size = 64
     batch_size = 128
     epochs = 20
