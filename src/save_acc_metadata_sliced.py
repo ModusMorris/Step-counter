@@ -3,11 +3,23 @@ import pandas as pd
 import numpy as np
 from clap_detection_methods import load_accelerometer_data
 
-# Function to slice and save accelerometer data
-
 
 def slice_accelerometer_data(metadata_csv, raw_accel_data_dir, output_root):
+    """
+    Slice accelerometer data for each video and save the slices to CSV files.
 
+    Reads a metadata CSV containing video IDs, filenames for left/right watches,
+    and start/end indices. For each watch file, loads the accelerometer data,
+    slices it, saves the slice, and records the slice length for later scaling.
+
+    Parameters:
+        metadata_csv (str): Path to the metadata CSV.
+        raw_accel_data_dir (str): Directory with raw accelerometer CSV files.
+        output_root (str): Directory where sliced data will be saved.
+
+    Returns:
+        list: Tuples of (length of sliced data, video folder path) for scaling purposes.
+    """
     df = pd.read_csv(metadata_csv)
     scaling_data = []
 
@@ -25,23 +37,14 @@ def slice_accelerometer_data(metadata_csv, raw_accel_data_dir, output_root):
                 print(f"File not found: {acc_data_path}")
                 continue
 
-            # Load and clean the full accelerometer data
             cleaned_data, _ = load_accelerometer_data(acc_data_path)
-
-            # Slice the data from start_idx to end_idx
             sliced_data = cleaned_data.loc[start_idx:end_idx]
-
-            # Create output folder for this video
             video_folder = os.path.join(output_root, video_id)
             os.makedirs(video_folder, exist_ok=True)
-
-            # Define the output filename
             output_filename = f"{video_id}_{side}_acceleration_data.csv"
             output_path = os.path.join(video_folder, output_filename)
 
             scaling_data.append((len(sliced_data), video_folder))
-
-            # Save sliced data
             sliced_data.to_csv(output_path, index=False)
             print(f"Sliced data for {side} watch saved to: {output_path}")
 
@@ -49,6 +52,16 @@ def slice_accelerometer_data(metadata_csv, raw_accel_data_dir, output_root):
 
 
 def scale_stepcounts_data(scaling_data):
+    """
+    Scale step counts based on the length of the sliced accelerometer data.
+
+    For each video folder, reads the step count data and raw video data to compute a
+    scaling factor. Then updates the "Peaks" values in the step counts by applying this factor,
+    and saves the scaled data.
+
+    Parameters:
+        scaling_data (list): List of tuples (length of sliced data, video folder path).
+    """
     for len_acc_data, video_folder in scaling_data:
         data_path = os.path.join(video_folder, "step_counts.csv")
         data = pd.read_csv(data_path)
