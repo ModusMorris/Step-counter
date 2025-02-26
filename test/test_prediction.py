@@ -3,7 +3,7 @@ import numpy as np
 from cnn.prediction import detect_steps
 
 def test_step_detection_performance():
-    sample_data = np.random.rand(10000, 2)  # 10.000 Frames mit ENMO-Werten
+    sample_data = np.random.rand(10000, 2)  # 10.000 frames with ENMO-values
     start_time = time.time()
-    detect_steps(None, "cpu", sample_data)  # Dummy-Aufruf ohne Modell
-    assert time.time() - start_time < 5  # Sollte nicht länger als 5 Sekunden dauern.
+    detect_steps(None, "cpu", sample_data)  # dummy call without model
+    assert time.time() - start_time < 5  # shouldn't last longer than 5 seconds
