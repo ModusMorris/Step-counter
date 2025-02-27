@@ -1,3 +1,4 @@
+from prediction import main as prediction
 import os
 import torch
 import torch.optim as optim
@@ -10,244 +11,310 @@ from sklearn.model_selection import train_test_split
 from data_generator import load_datasets
 from model_step_counter import StepCounterCNN
 from torch.utils.data import DataLoader, ConcatDataset, Subset
-from sklearn.metrics import classification_report, confusion_matrix, roc_curve, auc
-from prediction import main as prediction
+from sklearn.metrics import (
+    classification_report,
+    confusion_matrix,
+    roc_curve,
+    auc,
+    multilabel_confusion_matrix
+)
+import pandas as pd
 
+# ==========================================
+# Helper Classes & Functions
+# ==========================================
+class EarlyStopping:
+    def __init__(self, patience=4, min_delta=0.005, path="best_model.pth"):
+        self.patience = patience
+        self.min_delta = min_delta
+        self.path = path
+        self.best_loss = float("inf")
+        self.counter = 0
+        self.best_epoch = 0
+        self.best_train_loss = float("inf")
 
-def load_all_datasets(root_folder, window_size, batch_size):
-    """
-    Loads all datasets from subfolders in the given root folder.
+    def check(self, train_loss, val_loss, model, epoch):
+        if val_loss < self.best_loss - self.min_delta:
+            self.best_loss = val_loss
+            self.best_train_loss = train_loss
+            self.best_epoch = epoch
+            self.counter = 0
+            torch.save(model.state_dict(), self.path)
+        elif abs(train_loss - val_loss) > self.min_delta and val_loss >= self.best_loss:
+            print("Early stopping triggered due to overfitting!")
+            model.load_state_dict(torch.load(self.path))
+            return True
+        else:
+            self.counter += 1
+            if self.counter >= self.patience:
+                print(f"Early stopping triggered! Best model from epoch {self.best_epoch + 1} loaded.")
+                model.load_state_dict(torch.load(self.path))
+                return True
+        return False
 
-    Parameters:
-    root_folder (str): Path to the root directory containing dataset folders.
-    window_size (int): Number of samples per window for the model.
-    batch_size (int): Number of samples per batch.
+def split_dataset(dataset, ratio=0.2):
+    train_idx, test_idx = train_test_split(np.arange(len(dataset)), test_size=ratio, random_state=42)
+    print(f"Train samples: {len(train_idx)}, Test samples: {len(test_idx)}")
+    return Subset(dataset, train_idx), Subset(dataset, test_idx)
 
-    Returns:
-    ConcatDataset: Combined dataset from all subfolders.
-    """
+def load_all_datasets(root_folder, window_size, batch_size, gait_info_df):
+    """Extended loading of all folders, passing gait_info_df to load_datasets()."""
     subfolders = [f.path for f in os.scandir(root_folder) if f.is_dir()]
     if not subfolders:
         print("No folders found in", root_folder)
         return None
 
-    # Load datasets from each subfolder
-    all_data_loaders = [
-        load_datasets(sf, window_size, batch_size).dataset
-        for sf in subfolders
-        if load_datasets(sf, window_size, batch_size) is not None
-    ]
-    if not all_data_loaders:
+    all_datasets = []
+    for sf in subfolders:
+        dl = load_datasets(sf, window_size, batch_size, gait_info_df)  # <-- adjusted in data_generator
+        if dl is not None:
+            all_datasets.append(dl.dataset)
+
+    if not all_datasets:
         print("No datasets available!")
         return None
 
-    # Combine all datasets into one
-    combined = ConcatDataset(all_data_loaders)
-    print(f"{len(all_data_loaders)} datasets, total: {len(combined)} samples.")
+    combined = ConcatDataset(all_datasets)
+    print(f"{len(all_datasets)} datasets, total: {len(combined)} samples.")
     return combined
 
+# ==========================================
+# Main Training Function
+# ==========================================
+def train_step_counter(
+    root_folder,
+    window_size=256,
+    batch_size=32,
+    epochs=5,
+    lr=0.001,
+    patience=4,
+    gait_csv="D:/Step-counter/Data/acceleration_metadata.csv"
+):
+    # 1) Load CSV with gait information
+    gait_info_df = pd.read_csv(gait_csv)
 
-def split_dataset(dataset, ratio=0.2):
-    """
-    Splits the dataset into training and testing sets.
-
-    Parameters:
-    dataset (ConcatDataset): The dataset to be split.
-    ratio (float): The proportion of data to be used for testing. Default is 0.2 (20%).
-
-    Returns:
-    Tuple[Subset, Subset]: Training and testing dataset subsets.
-    """
-    train_idx, test_idx = train_test_split(np.arange(len(dataset)), test_size=ratio, random_state=42)
-    print(f"Train samples: {len(train_idx)}, Test samples: {len(test_idx)}")
-    return Subset(dataset, train_idx), Subset(dataset, test_idx)
-
-
-class EarlyStopping:
-    def __init__(self, patience=4, min_delta=0.005, path="best_model.pth"):
-        """
-        Initializes the EarlyStopping mechanism.
-
-        Args:
-            patience (int): Number of epochs to wait for improvement before stopping.
-            min_delta (float): Minimum improvement in validation loss to be considered significant.
-            path (str): File path where the best model will be saved.
-        """
-        self.patience = patience  # Number of epochs with no improvement before stopping
-        self.min_delta = min_delta  # Minimum required change in validation loss
-        self.path = path  # Path to save the best model
-        self.best_loss = float("inf")  # Initialize best validation loss as infinity
-        self.counter = 0  # Counter to track epochs without improvement
-        self.best_epoch = 0  # Stores the epoch with the best validation loss
-        self.best_train_loss = float("inf")  # Stores the training loss of the best model
-
-    def check(self, train_loss, val_loss, model, epoch):
-        """
-        Checks whether training should stop early based on validation loss.
-
-        Args:
-            train_loss (float): Current training loss.
-            val_loss (float): Current validation loss.
-            model (torch.nn.Module): The PyTorch model being trained.
-            epoch (int): The current epoch number.
-
-        Returns:
-            bool: True if training should stop, False otherwise.
-        """
-
-        # If the validation loss improves significantly, save the model
-        if val_loss < self.best_loss - self.min_delta:
-            self.best_loss = val_loss  # Update best validation loss
-            self.best_train_loss = train_loss  # Store corresponding training loss
-            self.best_epoch = epoch  # Store epoch number of the best model
-            self.counter = 0  # Reset counter since there was an improvement
-            torch.save(model.state_dict(), self.path)  # Save the best model checkpoint
-
-        # Check if overfitting occurs (training loss is much lower than validation loss)
-        elif abs(train_loss - val_loss) > self.min_delta and val_loss >= self.best_loss:
-            print("Early stopping triggered due to overfitting!")  # Print warning
-            model.load_state_dict(torch.load(self.path))  # Load the best saved model
-            return True  # Stop training
-
-        else:
-            # No significant improvement, increment counter
-            self.counter += 1
-
-            # If patience limit is reached, stop training
-            if self.counter >= self.patience:
-                print(f"Early stopping triggered! Best model from epoch {self.best_epoch + 1} loaded from {self.path}")
-                model.load_state_dict(torch.load(self.path))  # Load the best model
-                return True  # Stop training
-
-        return False  # Continue training
-
-
-def train_step_counter(root_folder, window_size=256, batch_size=32, epochs=5, lr=0.001, patience=4):
-    combined_dataset = load_all_datasets(root_folder, window_size, batch_size)
+    # 2) Load dataset
+    combined_dataset = load_all_datasets(root_folder, window_size, batch_size, gait_info_df)
     if combined_dataset is None:
         return None, None, None
 
-    train_ds, test_ds = split_dataset(combined_dataset)
+    # 3) Split into training/validation
+    train_ds, test_ds = split_dataset(combined_dataset, ratio=0.2)
     train_loader = DataLoader(train_ds, batch_size=batch_size, shuffle=True)
     test_loader = DataLoader(test_ds, batch_size=batch_size, shuffle=False)
 
+    # 4) Define model, optimizer, loss
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = StepCounterCNN(window_size).to(device).float()
 
-    criterion = nn.BCELoss(weight=torch.tensor([5.0], device=device).float())
+    # For multi-label: BCE loss without logits, as we already have sigmoid in the model
+    # For step, additionally a weight if you have imbalance
+    # Here a simplified example (without special weights)
+    criterion = nn.BCELoss()
     optimizer = optim.Adam(model.parameters(), lr=lr)
-    train_losses, test_losses = [], []
+
+    # EarlyStopping & loss lists
     early_stopping = EarlyStopping(patience=patience)
+    train_losses, test_losses = [], []
 
-    model.train()
+    # 5) Training
     for ep in range(epochs):
+        model.train()
         ep_loss = 0.0
-        with tqdm(total=len(train_loader), desc=f"Epoch {ep+1}/{epochs}") as pbar:
-            for X, Y in train_loader:
-                X, Y = X.float().to(device).permute(0, 2, 1), Y.float().to(device).max(dim=1, keepdim=True)[0]
-                optimizer.zero_grad()
-                loss = criterion(model(X), Y)
-                loss.backward()
-                optimizer.step()
-                ep_loss += loss.item()
-                pbar.update(1)
 
-        train_losses.append(ep_loss / len(train_loader))
+        for X, Y in tqdm(train_loader, desc=f"Epoch {ep+1}/{epochs}"):
+            # X shape: (batch, window_size, 2) => (batch,2,window_size)
+            X = X.permute(0,2,1).float().to(device)
+            Y = Y.float().to(device)  # shape: (batch, window_size, 7)
 
+            # 1) Step label
+            y_step = Y[:,:,0].max(dim=1).values.unsqueeze(1)  # (batch,1)
+
+            # 2) Gait label
+            y_gait = Y[:,0,1:]  # (batch,6)
+
+            optimizer.zero_grad()
+            out = model(X)  # (batch,7)
+
+            # => pred_step shape (batch,1), pred_gait shape (batch,6)
+            pred_step = out[:,0].unsqueeze(1)
+            pred_gait = out[:,1:]
+
+            loss_step = criterion(pred_step, y_step)
+            loss_gait = criterion(pred_gait, y_gait)
+            loss = loss_step + loss_gait
+            loss.backward()
+            optimizer.step()
+
+            ep_loss += loss.item()
+
+        train_loss = ep_loss / len(train_loader)
+        train_losses.append(train_loss)
+
+        # 6) Validation
         model.eval()
+        val_loss = 0.0
         with torch.no_grad():
-            test_loss = sum(
-                criterion(
-                    model(X.float().to(device).permute(0, 2, 1)), Y.float().to(device).max(dim=1, keepdim=True)[0]
-                ).item()
-                for X, Y in test_loader
-            ) / len(test_loader)
-        test_losses.append(test_loss)
-        print(f"\U0001F535 Epoch {ep+1}, Train Loss: {train_losses[-1]:.4f}, Test Loss: {test_losses[-1]:.4f}")
+            for X_val, Y_val in test_loader:
+                X_val = X_val.permute(0,2,1).float().to(device)
+                Y_val = Y_val.float().to(device)
 
-        if early_stopping.check(train_losses[-1], test_losses[-1], model, ep):
+                y_step_val = Y_val[:,:,0].max(dim=1).values.unsqueeze(1)
+                y_gait_val = Y_val[:,0,1:]
+
+                out_val = model(X_val)
+                pred_step_val = out_val[:,0].unsqueeze(1)
+                pred_gait_val = out_val[:,1:]
+
+                loss_step_val = criterion(pred_step_val, y_step_val)
+                loss_gait_val = criterion(pred_gait_val, y_gait_val)
+                val_loss += (loss_step_val + loss_gait_val).item()
+
+        val_loss /= len(test_loader)
+        test_losses.append(val_loss)
+
+        print(f"Epoch {ep+1}: train_loss={train_loss:.4f} val_loss={val_loss:.4f}")
+
+        # Early Stopping
+        if early_stopping.check(train_loss, val_loss, model, ep):
             break
 
+    # 7) Plot training progress
     plt.plot(train_losses, label="Training Loss")
-    plt.plot(test_losses, label="Test Loss", linestyle="dashed")
+    plt.plot(test_losses, label="Validation Loss", linestyle="dashed")
     plt.xlabel("Epoch")
     plt.ylabel("Loss")
     plt.legend()
     plt.grid()
     plt.show()
 
-    print(f"The model was saved at epoch {early_stopping.best_epoch + 1}.")
+    print(f"Best model was saved from epoch {early_stopping.best_epoch + 1}.")
     return model, test_loader, device
 
-
+# ==========================================
+# Evaluate Function with Multi-Label
+# ==========================================
 def evaluate_model(model, test_loader, device):
     """
-    Evaluates the trained model using a test dataset and generates performance metrics.
-
-    Parameters:
-    model (torch.nn.Module): Trained model to be evaluated.
-    test_loader (DataLoader): DataLoader for the test dataset.
-    device (torch.device): The device (CPU/GPU) on which evaluation is performed.
-
-    Outputs:
-    - Prints a classification report.
-    - Displays a confusion matrix.
-    - Roc Plot
+    Evaluates the trained model on:
+      - Steps (binary)
+      - 6 Gait labels (multi-label)
+    Then prints classification reports and confusion matrices,
+    plus ROC curves for each label.
     """
     model.eval()
-    y_true, y_pred, y_scores = [], [], []
+
+    all_step_true, all_step_pred, all_step_prob = [], [], []
+    all_gait_true, all_gait_pred, all_gait_prob = [], [], []
+
     with torch.no_grad():
         for X, Y in test_loader:
-            X, Y = X.float().to(device).permute(0, 2, 1), Y.float().to(device).max(dim=1, keepdim=True)[0]
-            outputs = model(X).cpu().numpy()
-            predictions = (outputs > 0.5).astype(int)
-            y_true.extend(Y.cpu().numpy().flatten())
-            y_pred.extend(predictions.flatten())
-            y_scores.extend(outputs.flatten())
+            X = X.permute(0,2,1).float().to(device)
+            Y = Y.float().to(device)  # (batch, window_size, 7)
 
-    print("Classification Report:")
-    print(classification_report(y_true, y_pred))
+            # True labels
+            y_step = Y[:,:,0].max(dim=1).values  # (batch,)
+            y_gait = Y[:,0,1:]                   # (batch,6)
 
-    cm = confusion_matrix(y_true, y_pred)
-    plt.figure(figsize=(6, 5))
-    sns.heatmap(cm, annot=True, fmt="d", cmap="Blues", xticklabels=["No Step", "Step"], yticklabels=["No Step", "Step"])
+            out = model(X)       # (batch,7)
+            pred_step = out[:,0] # (batch,)
+            pred_gait = out[:,1:]# (batch,6)
+
+            # Save for later metrics
+            all_step_true.append(y_step.cpu().numpy())           # shape (batch,)
+            all_step_prob.append(pred_step.cpu().numpy())        # shape (batch,)
+            all_step_pred.append((pred_step>0.5).cpu().numpy())  # shape (batch,)
+
+            all_gait_true.append(y_gait.cpu().numpy())             # shape (batch,6)
+            all_gait_prob.append(pred_gait.cpu().numpy())          # shape (batch,6)
+            all_gait_pred.append((pred_gait>0.5).cpu().numpy())    # shape (batch,6)
+
+    # Combine into NumPy arrays
+    all_step_true = np.concatenate(all_step_true, axis=0)
+    all_step_prob = np.concatenate(all_step_prob, axis=0)
+    all_step_pred = np.concatenate(all_step_pred, axis=0)
+
+    all_gait_true = np.concatenate(all_gait_true, axis=0)   # (N,6)
+    all_gait_prob = np.concatenate(all_gait_prob, axis=0)   # (N,6)
+    all_gait_pred = np.concatenate(all_gait_pred, axis=0)   # (N,6)
+
+    # --- 1) Steps (binary classification) ---
+    print("\n=== Steps (Binary) ===")
+    print(classification_report(all_step_true, all_step_pred, target_names=["No Step","Step"]))
+
+    cm = confusion_matrix(all_step_true, all_step_pred)
+    plt.figure(figsize=(5,4))
+    sns.heatmap(cm, annot=True, fmt="d", cmap="Blues", xticklabels=["No Step","Step"], yticklabels=["No Step","Step"])
+    plt.title("Confusion Matrix (Steps)")
     plt.xlabel("Predicted")
-    plt.ylabel("Actual")
-    plt.title("Confusion Matrix")
+    plt.ylabel("True")
     plt.show()
 
-    # ROC Curve
-    fpr, tpr, _ = roc_curve(y_true, y_scores)
-    roc_auc = auc(fpr, tpr)
-
-    plt.figure(figsize=(6, 5))
-    plt.plot(fpr, tpr, color="blue", lw=2, label=f"ROC curve (area = {roc_auc:.2f})")
-    plt.plot([0, 1], [0, 1], color="gray", linestyle="dashed")
+    # ROC curve for steps
+    fpr, tpr, _ = roc_curve(all_step_true, all_step_prob)
+    step_auc = auc(fpr, tpr)
+    plt.figure()
+    plt.plot(fpr, tpr, label=f"Step AUC={step_auc:.2f}")
+    plt.plot([0,1],[0,1], "--", color="gray")
     plt.xlabel("False Positive Rate")
     plt.ylabel("True Positive Rate")
-    plt.title("ROC Curve")
-    plt.legend(loc="lower right")
+    plt.title("ROC Curve (Steps)")
+    plt.legend()
     plt.grid()
     plt.show()
 
+    # --- 2) Gait types (multi-label) ---
+    gait_names = ["langsames_gehen","normales_gehen","laufen",
+                  "frei_mitschwingend","links_in_ht","rechts_in_ht"]
+
+    print("\n=== Gait Types (Multi-Label) ===")
+    print("-> Classification report per label:")
+    print(classification_report(all_gait_true, all_gait_pred, target_names=gait_names))
+
+    # Multi-label confusion matrix (each row = own 2x2)
+    ml_cms = multilabel_confusion_matrix(all_gait_true, all_gait_pred)
+    for i, label_name in enumerate(gait_names):
+        cm_i = ml_cms[i]
+        plt.figure(figsize=(5,4))
+        sns.heatmap(cm_i, annot=True, fmt="d", cmap="Blues")
+        plt.title(f"Confusion Matrix: {label_name}")
+        plt.xlabel("Predicted")
+        plt.ylabel("True")
+        plt.show()
+
+    # ROC curves for each gait type
+    plt.figure()
+    for i, label_name in enumerate(gait_names):
+        fpr_i, tpr_i, _ = roc_curve(all_gait_true[:,i], all_gait_prob[:,i])
+        auc_i = auc(fpr_i, tpr_i)
+        plt.plot(fpr_i, tpr_i, label=f"{label_name} (AUC={auc_i:.2f})")
+    plt.plot([0,1],[0,1],"--",color="gray")
+    plt.xlabel("False Positive Rate")
+    plt.ylabel("True Positive Rate")
+    plt.title("ROC Curves (Gaits)")
+    plt.legend()
+    plt.grid()
+    plt.show()
 
 def main():
-    root_folder = "D:\Step-counter\Output"
+    # Example paths
+    root_folder = r"D:\Step-counter\Output"
     window_size = 64
     batch_size = 128
     epochs = 20
+    lr = 1e-3
 
-    model, test_loader, device = train_step_counter(root_folder, window_size, batch_size, epochs, 1e-3)
+    model, test_loader, device = train_step_counter(
+        root_folder, window_size, batch_size, epochs, lr
+    )
     if model is not None and test_loader is not None:
         evaluate_model(model, test_loader, device)
-
     model_path = "best_model.pth"
-    left_csv = "D:/Daisy/5. Semester/SmartHealth/Step-counter/Output/processed_sliced_and_scaled data/test/005/005_left_acceleration_data.csv"
-    right_csv = "D:/Daisy/5. Semester/SmartHealth/Step-counter/Output/processed_sliced_and_scaled data/test/005/005_right_acceleration_data.csv"
-    stepcount_csv = "D:/Daisy/5. Semester/SmartHealth/Step-counter/Output/processed_sliced_and_scaled data/test/005/scaled_step_counts.csv"
+    left_csv = "D:\Step-counter\Output\GX010061\GX010061_left_acceleration_data.csv"
+    right_csv = "D:\Step-counter\Output\GX010061\GX010061_right_acceleration_data.csv"
+    stepcount_csv = "D:\Step-counter\Output\GX010061\scaled_step_counts.csv"
 
     prediction(model_path, left_csv, right_csv, stepcount_csv)
-
 
 if __name__ == "__main__":
     main()
