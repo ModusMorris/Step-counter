@@ -83,7 +83,7 @@ def load_all_datasets(root_folder, window_size, batch_size, gait_info_df):
 # ==========================================
 def train_step_counter(
     root_folder,
-    window_size=256,
+    window_size=64,
     batch_size=32,
     epochs=5,
     lr=0.001,

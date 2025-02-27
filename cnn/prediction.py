@@ -83,82 +83,107 @@ def parse_groundtruth_steps(groundtruth_csv):
 def plot_results(data, step_probs, gait_probs, detected_steps, groundtruth_steps):
     """
     Plotly visualization:
-      - Data (ENMO_left / ENMO_right)
-      - step_probs
-      - detected_steps (as markers)
-      - groundtruth_steps (as markers)
-      - a single 'best gait' per frame (via argmax)
+      - ENMO_left / ENMO_right as lines (left axis).
+      - Step probability (0..1) as a red line on the left axis.
+      - Detected steps as red markers, ground truth steps as green markers.
+      - Predicted gait on a SECOND y-axis (right side), showing category labels instead of 0..5.
     """
     # 1) Determine the single best gait per frame by argmax
     gait_names = ["langsames_gehen","normales_gehen","laufen",
                   "frei_mitschwingend","links_in_ht","rechts_in_ht"]
     predicted_gait_index = np.argmax(gait_probs, axis=1)
-    # For display as text
-    predicted_gait_labels = [gait_names[idx] for idx in predicted_gait_index]
 
     fig = go.Figure()
     time_axis = np.arange(len(data))
 
-    # 2) Plot ENMO Left / Right
-    fig.add_trace(go.Scatter(x=time_axis, y=data["ENMO_left"], mode="lines", name="ENMO_left"))
-    fig.add_trace(go.Scatter(x=time_axis, y=data["ENMO_right"], mode="lines", name="ENMO_right"))
+    # ENMO signals on the left axis
+    fig.add_trace(go.Scatter(
+        x=time_axis, 
+        y=data["ENMO_left"], 
+        mode="lines", 
+        name="ENMO_left",
+        yaxis="y1"
+    ))
+    fig.add_trace(go.Scatter(
+        x=time_axis, 
+        y=data["ENMO_right"], 
+        mode="lines", 
+        name="ENMO_right",
+        yaxis="y1"
+    ))
 
-    # 3) Plot step probability
-    fig.add_trace(go.Scatter(x=time_axis, y=step_probs, mode="lines", name="Step Probability", line=dict(color="red")))
+    # Step probability on the left axis as well
+    fig.add_trace(go.Scatter(
+        x=time_axis, 
+        y=step_probs, 
+        mode="lines", 
+        name="Step Probability",  # the CNN output for steps
+        line=dict(color="red"),
+        yaxis="y1"
+    ))
 
-    # 4) Detected steps (index, y=...)
-    fig.add_trace(
-        go.Scatter(
-            x=list(detected_steps),
-            y=[step_probs[i] for i in detected_steps],
-            mode="markers",
-            name=f"Detected Steps ({len(detected_steps)})",
-            marker=dict(color="red", size=8),
-        )
-    )
+    # Detected steps (red markers) on the left axis
+    fig.add_trace(go.Scatter(
+        x=list(detected_steps),
+        y=[step_probs[i] for i in detected_steps],
+        mode="markers",
+        name=f"Detected Steps ({len(detected_steps)})",
+        marker=dict(color="red", size=8),
+        yaxis="y1"
+    ))
 
-    # 5) Ground Truth Steps
-    fig.add_trace(
-        go.Scatter(
-            x=list(groundtruth_steps),
-            y=[step_probs[i] for i in groundtruth_steps],
-            mode="markers",
-            name=f"Ground Truth Steps ({len(groundtruth_steps)})",
-            marker=dict(color="green", symbol="x", size=8),
-        )
-    )
+    # Ground truth steps (green markers) on the left axis
+    fig.add_trace(go.Scatter(
+        x=list(groundtruth_steps),
+        y=[step_probs[i] for i in groundtruth_steps],
+        mode="markers",
+        name=f"Ground Truth Steps ({len(groundtruth_steps)})",
+        marker=dict(color="green", symbol="x", size=8),
+        yaxis="y1"
+    ))
 
-    # 6) Single best gait per frame: we plot the index or label
-    #    Here, we'll plot the index as y-values and show the label as text on hover.
-    #    You can also store the label as discrete categories if desired.
-    fig.add_trace(
-        go.Scatter(
-            x=time_axis,
-            y=predicted_gait_index,
-            mode="markers",
-            name="Predicted Gait (argmax)",
-            text=predicted_gait_labels,
-            textposition="top center",
-            marker=dict(color="blue", size=5)
-        )
-    )
+    # Plot predicted gait on a SECOND y-axis, showing index as numeric
+    # but we will map them to category labels with tickvals/ticktext below
+    fig.add_trace(go.Scatter(
+        x=time_axis,
+        y=predicted_gait_index,
+        mode="markers",
+        name="Predicted Gait",
+        marker=dict(color="blue", size=6),
+        yaxis="y2"  # <--- second axis
+    ))
 
+    # Layout with two y-axes
     fig.update_layout(
         title="Steps and Single Best Gait",
-        xaxis_title="Frame",
-        yaxis_title="Probability / Gait Index",
+        xaxis=dict(title="Frame"),
+        yaxis=dict(
+            title="Acceleration / Probability",
+            side="left",
+            range=[0, max(step_probs.max(), data["ENMO_left"].max(), data["ENMO_right"].max())+0.5],
+        ),
+        # y2: the axis for the gait index
+        yaxis2=dict(
+            title="Predicted Gait (Categories)",
+            overlaying="y",   # shares the same x-axis
+            side="right",
+            tickmode="array",
+            tickvals=[0,1,2,3,4,5],     # indices 0..5
+            ticktext=gait_names,       # the actual labels
+            range=[-0.5, 5.5]
+        ),
         legend_title="Legend",
         template="plotly_white",
     )
 
     fig.show()
 
-    # If you want to print just the final selected gait (e.g., majority over the entire sequence),
-    # you could do something like this:
+    # Majority vote on the entire sequence
     majority_gait_idx = np.bincount(predicted_gait_index).argmax()
     majority_gait_label = gait_names[majority_gait_idx]
     print(f"Detected {len(detected_steps)} steps in total.")
     print(f"Overall predicted gait (majority): {majority_gait_label}")
+
 
 def main(model_path, left_csv, right_csv, groundtruth_csv):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
