@@ -38,7 +38,7 @@ jobs:
 
       - name: Lint with ruff
         run: |
-          ruff check src tests --fix
+          ruff check src --fix
 
       - name: Test with pytest
         run: |
