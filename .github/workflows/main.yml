@@ -30,16 +30,13 @@ jobs:
         run: |
           choco install visualstudio2019buildtools --package-parameters "--add Microsoft.VisualStudio.Workload.VCTools"
           choco install cmake
-          # Ab hier werden deine Python-Abhängigkeiten installiert
-          pip install -r requirements.txt
+          # Hier KEINE Installation aus requirements.txt
           pip install -e .
-          # Falls du matplotlib unbedingt noch mal getrennt installieren musst:
-          # pip install matplotlib --prefer-binary
 
       - name: Install dependencies on other OSes
         if: matrix.os != 'windows-latest'
         run: |
-          pip install -r requirements.txt
+          # Hier KEINE Installation aus requirements.txt
           pip install -e .
 
       - name: Lint with ruff
