@@ -24,20 +24,17 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
-      - name: Install dependencies on Windows
+      # Wenn du dennoch Build-Tools auf Windows brauchst, kannst du das behalten.
+      - name: Windows Build Tools (nur wenn nötig)
         if: matrix.os == 'windows-latest'
         shell: bash
         run: |
           choco install visualstudio2019buildtools --package-parameters "--add Microsoft.VisualStudio.Workload.VCTools"
           choco install cmake
-          # Hier KEINE Installation aus requirements.txt
-          pip install -e .
 
-      - name: Install dependencies on other OSes
-        if: matrix.os != 'windows-latest'
+      - name: Install Lint- und Test-Tools
         run: |
-          # Hier KEINE Installation aus requirements.txt
-          pip install -e .
+          pip install ruff pytest
 
       - name: Lint with ruff
         run: |
